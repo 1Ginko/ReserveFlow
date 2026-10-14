@@ -21,11 +21,6 @@ public class ProductInventoryEntity {
     @Column(name = PRODUCT_ID, nullable = false, updatable = false)
     private UUID productId;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @MapsId
-    @JoinColumn(name = PRODUCT_ID, nullable = false, updatable = false)
-    private ProductEntity product;
-
     @Column(name = ON_HAND_QUANTITY, nullable = false)
     private int onHandQuantity;
 
@@ -43,12 +38,11 @@ public class ProductInventoryEntity {
     protected ProductInventoryEntity() {}
 
     public ProductInventoryEntity(
-            ProductEntity product,
+            UUID productUUID,
             int onHandQuantity,
             Instant updatedAt
     ) {
-        this.productId = product.getProductId();
-        this.product = product;
+        this.productId = productUUID;
         this.onHandQuantity = onHandQuantity;
         this.reservedQuantity = 0;
         this.updatedAt = updatedAt;
