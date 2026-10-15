@@ -52,7 +52,6 @@ public class ProductService {
                 now,
                 now
         );
-
         productStorage.create(product);
 
         return product;
