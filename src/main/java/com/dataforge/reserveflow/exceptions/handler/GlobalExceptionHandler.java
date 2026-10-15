@@ -1,5 +1,6 @@
-package com.dataforge.reserveflow.exceptions;
+package com.dataforge.reserveflow.exceptions.handler;
 
+import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.products.api.error.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
