@@ -2,7 +2,7 @@ package com.dataforge.reserveflow.products.api;
 
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.products.ProductService;
-import com.dataforge.reserveflow.products.catalog.model.Product;
+import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

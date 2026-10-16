@@ -2,7 +2,7 @@ package com.dataforge.reserveflow.products.api;
 
 import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
 import com.dataforge.reserveflow.products.api.model.ProductResponse;
-import com.dataforge.reserveflow.products.catalog.model.Product;
+import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 
 public final class ProductControllerMapper {

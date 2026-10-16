@@ -1,4 +1,4 @@
-package com.dataforge.reserveflow.products.api.error;
+package com.dataforge.reserveflow.error;
 
 import java.time.Instant;
 import java.util.Map;

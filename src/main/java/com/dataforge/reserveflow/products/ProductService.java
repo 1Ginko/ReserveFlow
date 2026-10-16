@@ -1,8 +1,8 @@
 package com.dataforge.reserveflow.products;
 
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
-import com.dataforge.reserveflow.products.catalog.model.Product;
-import com.dataforge.reserveflow.products.catalog.storage.ProductStorage;
+import com.dataforge.reserveflow.products.model.Product;
+import com.dataforge.reserveflow.products.storage.ProductStorage;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import org.springframework.stereotype.Service;
 

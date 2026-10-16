@@ -3,7 +3,7 @@ package com.dataforge.reserveflow.products.api;
 import com.dataforge.reserveflow.products.ProductService;
 import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
 import com.dataforge.reserveflow.products.api.model.ProductResponse;
-import com.dataforge.reserveflow.products.catalog.model.Product;
+import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

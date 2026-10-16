@@ -1,4 +1,4 @@
-package com.dataforge.reserveflow.products.catalog.model;
+package com.dataforge.reserveflow.products.model;
 
 import java.math.BigDecimal;
 import java.time.Instant;
