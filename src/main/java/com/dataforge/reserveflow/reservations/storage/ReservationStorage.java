@@ -10,4 +10,6 @@ public interface ReservationStorage {
     void create(Reservation reservation);
 
     void cancel(UUID reservationId, Instant cancelledAt);
+
+    void confirm(UUID reservationId, Instant confirmedAt);
 }

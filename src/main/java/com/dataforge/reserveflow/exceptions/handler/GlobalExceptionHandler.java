@@ -8,6 +8,7 @@ import com.dataforge.reserveflow.error.ApiErrorResponse;
 import com.dataforge.reserveflow.exceptions.ProductInactiveException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
 import com.dataforge.reserveflow.exceptions.ReservationConcurrentUpdateException;
+import com.dataforge.reserveflow.exceptions.ReservationExpiredException;
 import com.dataforge.reserveflow.exceptions.ReservationNotActiveException;
 import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -87,7 +88,8 @@ public class GlobalExceptionHandler {
             InsufficientStockException.class,
             InventoryConcurrentUpdateException.class,
             ReservationNotActiveException.class,
-            ReservationConcurrentUpdateException.class
+            ReservationConcurrentUpdateException.class,
+            ReservationExpiredException.class
     })
     public ResponseEntity<ApiErrorResponse> handleReservationConflict(
             RuntimeException exception,

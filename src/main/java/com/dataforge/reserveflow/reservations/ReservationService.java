@@ -24,6 +24,10 @@ public class ReservationService {
         this.clock = clock;
     }
 
+    public void confirm(UUID reservationId) {
+        reservationStorage.confirm(reservationId, clock.instant());
+    }
+
     public void cancel(UUID reservationId) {
         reservationStorage.cancel(reservationId, clock.instant());
     }

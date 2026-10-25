@@ -29,4 +29,25 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
             @Param("expectedVersion") long expectedVersion,
             @Param("updatedAt") Instant updatedAt
     );
+
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = """
+            UPDATE reservations
+            SET reservation_status = 'CONFIRMED',
+                version = version + 1,
+                updated_at = :confirmedAt
+            WHERE reservation_id = :reservationId
+              AND reservation_status = 'ACTIVE'
+              AND version = :expectedVersion
+              AND expires_at > :confirmedAt
+            """,
+            nativeQuery = true
+    )
+    int confirmActiveReservation(
+            @Param("reservationId") UUID reservationId,
+            @Param("expectedVersion") long expectedVersion,
+            @Param("confirmedAt") Instant confirmedAt
+    );
 }

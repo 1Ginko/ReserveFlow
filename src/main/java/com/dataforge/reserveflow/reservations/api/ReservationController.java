@@ -26,6 +26,12 @@ public class ReservationController {
         this.reservationService = reservationService;
     }
 
+    @PostMapping("/{reservationId}/confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void confirm(@PathVariable UUID reservationId) {
+        reservationService.confirm(reservationId);
+    }
+
     @PostMapping("/{reservationId}/cancel")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void cancel(@PathVariable UUID reservationId) {
