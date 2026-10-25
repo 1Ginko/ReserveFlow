@@ -10,10 +10,17 @@ import com.dataforge.reserveflow.exceptions.InsufficientStockException;
 import com.dataforge.reserveflow.exceptions.InventoryConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductInactiveException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.exceptions.ReservationConcurrentUpdateException;
+import com.dataforge.reserveflow.exceptions.ReservationNotActiveException;
+import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationStatus;
 import com.dataforge.reserveflow.reservations.storage.ReservationStorage;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.UUID;
 
 @Repository
 public class ReservationStorageImpl implements ReservationStorage {
@@ -34,12 +41,53 @@ public class ReservationStorageImpl implements ReservationStorage {
 
     @Override
     @Transactional
+    public void cancel(UUID reservationId, Instant cancelledAt) {
+        ReservationEntity reservation = reservationRepository
+                .findById(reservationId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
+
+        if (reservation.getStatus() != ReservationStatus.ACTIVE) {
+            throw new ReservationNotActiveException(reservationId, reservation.getStatus());
+        }
+
+        int cancelledRows = reservationRepository.cancelActiveReservation(
+                reservationId,
+                reservation.getVersion(),
+                cancelledAt
+        );
+
+        if (cancelledRows == 0) {
+            throw new ReservationConcurrentUpdateException(reservationId);
+        }
+
+        UUID productId = reservation.getProductId();
+        ProductInventoryEntity inventory = inventoryRepository
+                .findById(productId)
+                .orElseThrow(() -> new IllegalStateException("Inventory not found for product: " + productId));
+
+        int newReservedQuantity = inventory.getReservedQuantity() - reservation.getQuantity();
+        int updatedRows = inventoryRepository.updateReservedQuantity(
+                productId,
+                newReservedQuantity,
+                inventory.getVersion(),
+                cancelledAt
+        );
+
+        if (updatedRows == 0) {
+            throw new InventoryConcurrentUpdateException(productId);
+        }
+    }
+
+    @Override
+    @Transactional
     public void create(Reservation reservation) {
         ProductEntity product = productRepository
                 .findById(reservation.productId())
                 .orElseThrow(() -> new ProductNotFoundException(reservation.productId()));
 
-        if (!product.isActive()) throw new ProductInactiveException(reservation.productId());
+        if (!product.isActive()) {
+            throw new ProductInactiveException(reservation.productId());
+        }
 
         ProductInventoryEntity productInventory = inventoryRepository
                 .findById(reservation.productId())
@@ -56,7 +104,9 @@ public class ReservationStorageImpl implements ReservationStorage {
                 reservation.updatedAt()
         );
 
-        if (updatedRows == 0) throw new InventoryConcurrentUpdateException(reservation.productId());
+        if (updatedRows == 0) {
+            throw new InventoryConcurrentUpdateException(reservation.productId());
+        }
 
         ReservationEntity reservationEntity = new ReservationEntity(
                 reservation.reservationId(),

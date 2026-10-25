@@ -24,6 +24,10 @@ public class ReservationService {
         this.clock = clock;
     }
 
+    public void cancel(UUID reservationId) {
+        reservationStorage.cancel(reservationId, clock.instant());
+    }
+
     public Reservation create(CreateReservationCommand command) {
         if (command.quantity() <= 0) throw new InvalidReservationQuantityException(command.quantity());
 

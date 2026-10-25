@@ -2,6 +2,9 @@ package com.dataforge.reserveflow.reservations.api;
 
 import com.dataforge.reserveflow.exceptions.InsufficientStockException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.exceptions.ReservationConcurrentUpdateException;
+import com.dataforge.reserveflow.exceptions.ReservationNotActiveException;
+import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.ReservationService;
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
@@ -18,9 +21,11 @@ import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -84,6 +89,90 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.updatedAt").value(createdAt.toString()));
 
         then(reservationService).should().create(command);
+    }
+
+    @Test
+    void cancelsReservation() throws Exception {
+        UUID reservationId =
+                UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
+
+        mockMvc.perform(post("/api/reservations/{reservationId}/cancel", reservationId))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        then(reservationService).should().cancel(reservationId);
+    }
+
+    @Test
+    void rejectsCancellationOfUnknownReservation() throws Exception {
+        UUID reservationId =
+                UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+        Instant now = Instant.parse("2026-10-25T09:25:00Z");
+        given(clock.instant()).willReturn(now);
+        willThrow(new ReservationNotFoundException(reservationId))
+                .given(reservationService).cancel(reservationId);
+
+        mockMvc.perform(post("/api/reservations/{reservationId}/cancel", reservationId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message")
+                        .value("Reservation not found: " + reservationId))
+                .andExpect(jsonPath("$.path")
+                        .value("/api/reservations/" + reservationId + "/cancel"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(reservationService).should().cancel(reservationId);
+    }
+
+    @Test
+    void rejectsCancellationOfCancelledReservation() throws Exception {
+        UUID reservationId =
+                UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
+
+        Instant now = Instant.parse("2026-10-25T09:27:14Z");
+        given(clock.instant()).willReturn(now);
+        willThrow(new ReservationNotActiveException(reservationId, ReservationStatus.CANCELLED))
+                .given(reservationService).cancel(reservationId);
+
+        mockMvc.perform(post("/api/reservations/{reservationId}/cancel", reservationId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message")
+                        .value("Reservation is not active: " + reservationId + ", status=CANCELLED"))
+                .andExpect(jsonPath("$.path")
+                        .value("/api/reservations/" + reservationId + "/cancel"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(reservationService).should().cancel(reservationId);
+    }
+
+    @Test
+    void rejectsConcurrentCancellation() throws Exception {
+        UUID reservationId =
+                UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
+
+        Instant now = Instant.parse("2026-10-25T09:28:00Z");
+        given(clock.instant()).willReturn(now);
+        willThrow(new ReservationConcurrentUpdateException(reservationId))
+                .given(reservationService).cancel(reservationId);
+
+        mockMvc.perform(post("/api/reservations/{reservationId}/cancel", reservationId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message")
+                        .value("Reservation was concurrently updated: " + reservationId))
+                .andExpect(jsonPath("$.path")
+                        .value("/api/reservations/" + reservationId + "/cancel"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(reservationService).should().cancel(reservationId);
     }
 
     @Test
