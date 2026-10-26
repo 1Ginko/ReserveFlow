@@ -15,12 +15,14 @@ import com.dataforge.reserveflow.exceptions.ReservationExpiredException;
 import com.dataforge.reserveflow.exceptions.ReservationNotActiveException;
 import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationExpirationCandidate;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
 import com.dataforge.reserveflow.reservations.storage.ReservationStorage;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -38,6 +40,50 @@ public class ReservationStorageImpl implements ReservationStorage {
         this.productRepository = productRepository;
         this.inventoryRepository = inventoryRepository;
         this.reservationRepository = reservationRepository;
+    }
+
+    @Override
+    @Transactional
+    public boolean expire(ReservationExpirationCandidate expiredReservation, Instant expiredAt) {
+        int expiredRows = reservationRepository.expireActiveReservation(
+                expiredReservation.reservationId(),
+                expiredReservation.version(),
+                expiredAt
+        );
+        if (expiredRows == 0) return false;
+
+        UUID productId = expiredReservation.productId();
+        ProductInventoryEntity inventory = inventoryRepository
+                .findById(productId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Inventory not found for product: " + productId
+                ));
+
+        int newReservedQuantity = inventory.getReservedQuantity() - expiredReservation.quantity();
+        int updatedRows = inventoryRepository.updateReservedQuantity(
+                productId,
+                newReservedQuantity,
+                inventory.getVersion(),
+                expiredAt
+        );
+        if (updatedRows == 0) {
+            throw new InventoryConcurrentUpdateException(productId);
+        }
+
+        return true;
+    }
+
+    @Override
+    public List<ReservationExpirationCandidate> findExpiredReservations(Instant now, int batchSize) {
+        return reservationRepository.findExpiredReservations(now, batchSize)
+                .stream()
+                .map(projection -> new ReservationExpirationCandidate(
+                        projection.getReservationId(),
+                        projection.getProductId(),
+                        projection.getQuantity(),
+                        projection.getVersion()
+                ))
+                .toList();
     }
 
     @Override
