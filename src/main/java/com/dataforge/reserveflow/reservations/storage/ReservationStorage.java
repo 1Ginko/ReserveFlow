@@ -5,6 +5,7 @@ import com.dataforge.reserveflow.reservations.model.ReservationExpirationCandida
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ReservationStorage {
@@ -16,6 +17,8 @@ public interface ReservationStorage {
     void confirm(UUID reservationId, Instant confirmedAt);
 
     List<ReservationExpirationCandidate> findExpiredReservations(Instant now, int batchSize);
+
+    Optional<Reservation> findById(UUID reservationId);
 
     boolean expire(ReservationExpirationCandidate candidate, Instant expiredAt);
 }

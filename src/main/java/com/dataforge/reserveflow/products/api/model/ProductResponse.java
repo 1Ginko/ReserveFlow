@@ -1,5 +1,7 @@
 package com.dataforge.reserveflow.products.api.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -12,10 +14,10 @@ public record ProductResponse(
         BigDecimal price,
         String currencyCode,
         boolean active,
-        int onHandQuantity,
-        int reservedQuantity,
-        int availableQuantity,
-        long inventoryVersion,
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        InventoryResponse inventory,
+
         Instant createdAt,
         Instant updatedAt
 ) {}

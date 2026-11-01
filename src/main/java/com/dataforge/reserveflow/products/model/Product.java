@@ -16,16 +16,8 @@ public record Product(
 
         boolean active,
 
-        int onHandQuantity,
-        int reservedQuantity,
-
-        long inventoryVersion,
+        ProductInventory inventory,
 
         Instant createdAt,
         Instant updatedAt
-) {
-
-    public int availableQuantity() {
-        return onHandQuantity - reservedQuantity;
-    }
-}
+) {}

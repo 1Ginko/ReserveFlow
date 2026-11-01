@@ -25,6 +25,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,6 +42,74 @@ class ReservationControllerTest {
 
     @MockitoBean
     private Clock clock;
+
+    @Test
+    void findsReservationById() throws Exception {
+        UUID reservationId =
+                UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
+
+        UUID productId =
+                UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+
+        Instant createdAt = Instant.parse("2026-10-24T08:25:16.321347Z");
+        Instant expiresAt = Instant.parse("2026-10-24T08:40:16.321347Z");
+        Instant updatedAt = Instant.parse("2026-10-25T09:26:03.599053Z");
+
+        Reservation reservation = new Reservation(
+                reservationId,
+                productId,
+                3,
+                ReservationStatus.CANCELLED,
+                expiresAt,
+                1,
+                createdAt,
+                updatedAt
+        );
+
+        given(reservationService.findById(reservationId)).willReturn(reservation);
+
+        mockMvc.perform(get("/api/reservations/{reservationId}", reservationId))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.reservationId")
+                        .value(reservationId.toString()))
+                .andExpect(jsonPath("$.productId")
+                        .value(productId.toString()))
+                .andExpect(jsonPath("$.quantity").value(3))
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.expiresAt").value(expiresAt.toString()))
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.createdAt").value(createdAt.toString()))
+                .andExpect(jsonPath("$.updatedAt").value(updatedAt.toString()));
+
+        then(reservationService).should().findById(reservationId);
+    }
+
+    @Test
+    void returnsNotFoundForUnknownReservation() throws Exception {
+        UUID reservationId =
+                UUID.fromString("00000000-0000-0000-0000-000000000000");
+
+        Instant now = Instant.parse("2026-10-27T08:32:39Z");
+
+        given(clock.instant()).willReturn(now);
+        given(reservationService.findById(reservationId))
+                .willThrow(new ReservationNotFoundException(reservationId));
+
+        mockMvc.perform(get("/api/reservations/{reservationId}", reservationId))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message")
+                        .value("Reservation not found: " + reservationId))
+                .andExpect(jsonPath("$.path")
+                        .value("/api/reservations/" + reservationId))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(reservationService).should().findById(reservationId);
+    }
 
     @Test
     void createsReservation() throws Exception {

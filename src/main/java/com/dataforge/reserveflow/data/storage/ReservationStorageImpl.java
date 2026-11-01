@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -40,6 +41,21 @@ public class ReservationStorageImpl implements ReservationStorage {
         this.productRepository = productRepository;
         this.inventoryRepository = inventoryRepository;
         this.reservationRepository = reservationRepository;
+    }
+
+    @Override
+    public Optional<Reservation> findById(UUID reservationId) {
+        return reservationRepository.findById(reservationId)
+                .map(entity -> new Reservation(
+                        entity.getReservationId(),
+                        entity.getProductId(),
+                        entity.getQuantity(),
+                        entity.getStatus(),
+                        entity.getExpiresAt(),
+                        entity.getVersion(),
+                        entity.getCreatedAt(),
+                        entity.getUpdatedAt()
+                ));
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.dataforge.reserveflow.reservations;
 
 import com.dataforge.reserveflow.exceptions.InvalidReservationQuantityException;
+import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
@@ -22,6 +23,11 @@ public class ReservationService {
     public ReservationService(ReservationStorage reservationStorage, Clock clock) {
         this.reservationStorage = reservationStorage;
         this.clock = clock;
+    }
+
+    public Reservation findById(UUID reservationId) {
+        return reservationStorage.findById(reservationId)
+                .orElseThrow(() -> new ReservationNotFoundException(reservationId));
     }
 
     public void confirm(UUID reservationId) {
