@@ -34,12 +34,12 @@ class ProductServiceTest {
     @Mock
     private ProductStorage productStorage;
 
-    private ProductService productService;
+    private ProductServiceImpl productService;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        productService = new ProductService(productStorage, clock);
+        productService = new ProductServiceImpl(productStorage, clock);
     }
 
     @Test
