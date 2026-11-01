@@ -2,6 +2,7 @@ package com.dataforge.reserveflow.products;
 
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
+import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
 import com.dataforge.reserveflow.products.storage.ProductStorage;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -105,6 +107,53 @@ class ProductServiceTest {
         } else {
             then(productStorage).should().findById(PRODUCT_ID);
         }
+        then(productStorage).shouldHaveNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"Updated product"})
+    void updatesProductWithNormalizedData(String description) {
+        UpdateProductCommand command = new UpdateProductCommand(
+                PRODUCT_ID,
+                " Smartphone Pro ",
+                description,
+                new BigDecimal("899.99"),
+                " usd ",
+                false,
+                3
+        );
+
+        UpdateProductCommand normalizedCommand = new UpdateProductCommand(
+                PRODUCT_ID,
+                "Smartphone Pro",
+                description,
+                new BigDecimal("899.99"),
+                "USD",
+                false,
+                3
+        );
+
+        Product updatedProduct = new Product(
+                PRODUCT_ID,
+                "PHONE-001",
+                "Smartphone Pro",
+                description,
+                new BigDecimal("899.99"),
+                "USD",
+                false,
+                4,
+                null,
+                NOW.minusSeconds(3600),
+                NOW
+        );
+
+        given(productStorage.update(normalizedCommand, NOW)).willReturn(updatedProduct);
+
+        Product result = productService.update(command);
+
+        assertEquals(updatedProduct, result);
+        then(productStorage).should().update(normalizedCommand, NOW);
         then(productStorage).shouldHaveNoMoreInteractions();
     }
 

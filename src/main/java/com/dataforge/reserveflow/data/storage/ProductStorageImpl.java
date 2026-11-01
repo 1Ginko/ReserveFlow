@@ -5,6 +5,9 @@ import com.dataforge.reserveflow.data.entity.ProductInventoryEntity;
 import com.dataforge.reserveflow.data.repository.ProductInventoryRepository;
 import com.dataforge.reserveflow.data.repository.ProductRepository;
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
+import com.dataforge.reserveflow.exceptions.ProductConcurrentUpdateException;
+import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
 import com.dataforge.reserveflow.products.storage.ProductStorage;
@@ -13,6 +16,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -107,6 +111,30 @@ public class ProductStorageImpl implements ProductStorage {
                 product.inventory().updatedAt()
         );
         inventoryRepository.save(inventoryEntity);
+    }
+
+    @Override
+    @Transactional
+    public Product update(UpdateProductCommand command, Instant updatedAt) {
+        int updatedRows = productRepository.updateProduct(
+                command.productId(),
+                command.name(),
+                command.description(),
+                command.price(),
+                command.currencyCode(),
+                command.active(),
+                command.expectedVersion(),
+                updatedAt
+        );
+
+        Product product = findById(command.productId())
+                .orElseThrow(() -> new ProductNotFoundException(command.productId()));
+
+        if (updatedRows == 0) {
+            throw new ProductConcurrentUpdateException(command.productId());
+        }
+
+        return product;
     }
 
 

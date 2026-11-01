@@ -3,9 +3,13 @@ package com.dataforge.reserveflow.products.api;
 import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
 import com.dataforge.reserveflow.products.api.model.InventoryResponse;
 import com.dataforge.reserveflow.products.api.model.ProductResponse;
+import com.dataforge.reserveflow.products.api.model.UpdateProductRequest;
+import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+
+import java.util.UUID;
 
 public final class ProductControllerMapper {
 
@@ -21,6 +25,21 @@ public final class ProductControllerMapper {
                 request.price(),
                 request.currencyCode(),
                 request.initialQuantity()
+        );
+    }
+
+    public static UpdateProductCommand toCommand(
+            UUID productId,
+            UpdateProductRequest request
+    ) {
+        return new UpdateProductCommand(
+                productId,
+                request.name(),
+                request.description(),
+                request.price(),
+                request.currencyCode(),
+                request.active(),
+                request.version()
         );
     }
 

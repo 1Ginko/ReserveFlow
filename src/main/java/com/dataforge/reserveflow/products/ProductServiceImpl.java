@@ -2,6 +2,7 @@ package com.dataforge.reserveflow.products;
 
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
 import com.dataforge.reserveflow.products.storage.ProductStorage;
@@ -71,5 +72,20 @@ public class ProductServiceImpl implements ProductService {
         productStorage.create(product);
 
         return product;
+    }
+
+    @Override
+    public Product update(UpdateProductCommand command) {
+        UpdateProductCommand normalizedCommand = new UpdateProductCommand(
+                command.productId(),
+                command.name().trim(),
+                command.description(),
+                command.price(),
+                command.currencyCode().trim().toUpperCase(Locale.ROOT),
+                command.active(),
+                command.expectedVersion()
+        );
+
+        return productStorage.update(normalizedCommand, clock.instant());
     }
 }

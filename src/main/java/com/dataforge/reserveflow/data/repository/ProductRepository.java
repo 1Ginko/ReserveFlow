@@ -3,9 +3,12 @@ package com.dataforge.reserveflow.data.repository;
 import com.dataforge.reserveflow.data.entity.ProductEntity;
 import com.dataforge.reserveflow.data.projection.ProductDetailsProjection;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +31,32 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             nativeQuery = true
     )
     boolean existsBySku(@Param("sku") String sku);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = """
+                UPDATE products
+                SET product_name = :name,
+                    product_description = :description,
+                    price = :price,
+                    currency_code = :currencyCode,
+                    active = :active,
+                    version = version + 1,
+                    updated_at = :updatedAt
+                WHERE product_id = :productId AND version = :expectedVersion
+                """,
+            nativeQuery = true
+    )
+    int updateProduct(
+            @Param("productId") UUID productId,
+            @Param("name") String name,
+            @Param("description") String description,
+            @Param("price") BigDecimal price,
+            @Param("currencyCode") String currencyCode,
+            @Param("active") boolean active,
+            @Param("expectedVersion") long expectedVersion,
+            @Param("updatedAt") Instant updatedAt
+    );
 
     @Query(
             value = """
