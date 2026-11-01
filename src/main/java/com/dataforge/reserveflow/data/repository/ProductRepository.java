@@ -39,6 +39,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
                     p.price AS "price",
                     p.currency_code AS "currencyCode",
                     p.active AS "active",
+                    p.version AS "version",
                     p.created_at AS "createdAt",
                     p.updated_at AS "updatedAt",
                     i.on_hand_quantity AS "onHandQuantity",

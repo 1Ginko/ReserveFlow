@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -34,6 +35,10 @@ public class ProductEntity {
 
     @Column(name = PRODUCT_ACTIVE, nullable = false)
     private boolean active;
+
+    @Version
+    @Column(name = PRODUCT_VERSION, nullable = false)
+    private long version;
 
     @Column(name = PRODUCT_CREATED_AT, nullable = false, updatable = false)
     private Instant createdAt;
@@ -92,6 +97,10 @@ public class ProductEntity {
         return active;
     }
 
+    public long getVersion() {
+        return version;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -110,4 +119,5 @@ public class ProductEntity {
     static final String PRODUCT_ACTIVE = "active";
     static final String PRODUCT_CREATED_AT = "created_at";
     static final String PRODUCT_UPDATED_AT = "updated_at";
+    static final String PRODUCT_VERSION = "version";
 }

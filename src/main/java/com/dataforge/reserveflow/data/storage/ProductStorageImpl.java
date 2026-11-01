@@ -41,6 +41,7 @@ public class ProductStorageImpl implements ProductStorage {
                         entity.getPrice(),
                         entity.getCurrencyCode(),
                         entity.isActive(),
+                        entity.getVersion(),
                         null,
                         entity.getCreatedAt(),
                         entity.getUpdatedAt()
@@ -66,6 +67,7 @@ public class ProductStorageImpl implements ProductStorage {
                             projection.getPrice(),
                             projection.getCurrencyCode(),
                             projection.isActive(),
+                            projection.getVersion(),
                             inventory,
                             projection.getCreatedAt(),
                             projection.getUpdatedAt()

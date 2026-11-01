@@ -1,6 +1,7 @@
 package com.dataforge.reserveflow.products;
 
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
 import com.dataforge.reserveflow.products.storage.ProductStorage;
@@ -39,6 +40,24 @@ class ProductServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         productService = new ProductService(productStorage, clock);
+    }
+
+    @Test
+    void createsProductWithInitialVersion() {
+        CreateProductCommand command = new CreateProductCommand(
+                "phone-001",
+                "Smartphone",
+                "Test product",
+                new BigDecimal("799.99"),
+                "usd",
+                10
+        );
+
+        Product product = productService.create(command);
+
+        assertEquals(0, product.version());
+        assertEquals(0, product.inventory().version());
+        then(productStorage).should().create(product);
     }
 
     @Test
@@ -98,6 +117,7 @@ class ProductServiceTest {
                 new BigDecimal("799.99"),
                 "USD",
                 true,
+                3,
                 inventory,
                 NOW,
                 NOW

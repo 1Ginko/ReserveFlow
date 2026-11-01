@@ -57,6 +57,7 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.price").value(799.99))
                 .andExpect(jsonPath("$.currencyCode").value("USD"))
                 .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.version").value(3))
                 .andExpect(jsonPath("$.createdAt").value(product.createdAt().toString()))
                 .andExpect(jsonPath("$.updatedAt").value(product.updatedAt().toString()))
                 .andExpect(jsonPath("$.inventory").doesNotHaveJsonPath());
@@ -77,6 +78,7 @@ class ProductControllerTest {
                         .param("include", "inventory"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.productId").value(productId.toString()))
+                .andExpect(jsonPath("$.version").value(3))
                 .andExpect(jsonPath("$.updatedAt").value(product.updatedAt().toString()))
                 .andExpect(jsonPath("$.inventory.onHandQuantity").value(10))
                 .andExpect(jsonPath("$.inventory.reservedQuantity").value(3))
@@ -148,6 +150,7 @@ class ProductControllerTest {
                 new BigDecimal("799.99"),
                 "USD",
                 true,
+                0,
                 new ProductInventory(10, 0, 0, now),
                 now,
                 now
@@ -164,6 +167,7 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.price").value(799.99))
                 .andExpect(jsonPath("$.currencyCode").value("USD"))
                 .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.version").value(0))
                 .andExpect(jsonPath("$.inventory.onHandQuantity").value(10))
                 .andExpect(jsonPath("$.inventory.reservedQuantity").value(0))
                 .andExpect(jsonPath("$.inventory.availableQuantity").value(10))
@@ -243,6 +247,7 @@ class ProductControllerTest {
                 new BigDecimal("799.99"),
                 "USD",
                 true,
+                3,
                 inventory,
                 createdAt,
                 createdAt

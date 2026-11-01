@@ -12,6 +12,7 @@ public interface ProductDetailsProjection {
     BigDecimal getPrice();
     String getCurrencyCode();
     boolean isActive();
+    long getVersion();
     Instant getCreatedAt();
     Instant getUpdatedAt();
 

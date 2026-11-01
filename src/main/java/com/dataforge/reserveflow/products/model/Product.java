@@ -15,6 +15,7 @@ public record Product(
         String currencyCode,
 
         boolean active,
+        long version,
 
         ProductInventory inventory,
 

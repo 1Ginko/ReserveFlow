@@ -14,6 +14,7 @@ public record ProductResponse(
         BigDecimal price,
         String currencyCode,
         boolean active,
+        long version,
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
         InventoryResponse inventory,

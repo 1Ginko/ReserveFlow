@@ -34,6 +34,7 @@ public final class ProductControllerMapper {
                 product.price(),
                 product.currencyCode(),
                 product.active(),
+                product.version(),
                 inventory,
                 product.createdAt(),
                 product.updatedAt()

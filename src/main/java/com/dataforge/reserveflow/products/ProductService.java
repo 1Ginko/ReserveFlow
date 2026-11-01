@@ -63,6 +63,7 @@ public class ProductService {
                 command.price(),
                 currencyCode,
                 true,
+                0,
                 inventory,
                 now,
                 now
