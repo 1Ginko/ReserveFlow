@@ -4,9 +4,12 @@ import com.dataforge.reserveflow.data.entity.ProductEntity;
 import com.dataforge.reserveflow.data.entity.ProductInventoryEntity;
 import com.dataforge.reserveflow.data.repository.ProductInventoryRepository;
 import com.dataforge.reserveflow.data.repository.ProductRepository;
+import com.dataforge.reserveflow.exceptions.InventoryCapacityExceededException;
+import com.dataforge.reserveflow.exceptions.InventoryConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.exceptions.ProductConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
@@ -135,6 +138,42 @@ public class ProductStorageImpl implements ProductStorage {
         }
 
         return product;
+    }
+
+    @Override
+    @Transactional
+    public ProductInventory restock(RestockProductCommand command, Instant updatedAt) {
+        int updatedRows = inventoryRepository.restock(
+                command.productId(),
+                command.quantity(),
+                command.expectedVersion(),
+                updatedAt
+        );
+
+        ProductInventoryEntity entity = inventoryRepository.findById(command.productId())
+                .orElseThrow(() -> {
+                    if (!productRepository.existsById(command.productId())) {
+                        return new ProductNotFoundException(command.productId());
+                    }
+
+                    return new IllegalStateException("Inventory not found for product: " + command.productId());
+                });
+
+
+        if (updatedRows == 0) {
+            if (entity.getVersion() != command.expectedVersion()) {
+                throw new InventoryConcurrentUpdateException(command.productId());
+            }
+
+            throw new InventoryCapacityExceededException(command.productId());
+        }
+
+        return new ProductInventory(
+                entity.getOnHandQuantity(),
+                entity.getReservedQuantity(),
+                entity.getVersion(),
+                entity.getUpdatedAt()
+        );
     }
 
 

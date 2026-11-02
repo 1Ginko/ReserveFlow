@@ -3,6 +3,8 @@ package com.dataforge.reserveflow.exceptions.handler;
 import com.dataforge.reserveflow.exceptions.InsufficientStockException;
 import com.dataforge.reserveflow.exceptions.InvalidIncludeException;
 import com.dataforge.reserveflow.exceptions.InvalidReservationQuantityException;
+import com.dataforge.reserveflow.exceptions.InvalidRestockQuantityException;
+import com.dataforge.reserveflow.exceptions.InventoryCapacityExceededException;
 import com.dataforge.reserveflow.exceptions.InventoryConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.error.ApiErrorResponse;
@@ -90,6 +92,7 @@ public class GlobalExceptionHandler {
             InsufficientStockException.class,
             ReservationExpiredException.class,
             ReservationNotActiveException.class,
+            InventoryCapacityExceededException.class,
             ProductConcurrentUpdateException.class,
             InventoryConcurrentUpdateException.class,
             ReservationConcurrentUpdateException.class
@@ -115,9 +118,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             InvalidReservationQuantityException.class,
+            InvalidRestockQuantityException.class,
             InvalidIncludeException.class
     })
-    public ResponseEntity<ApiErrorResponse> handleInvalidReservationQuantity(
+    public ResponseEntity<ApiErrorResponse> handleBadRequest(
             RuntimeException exception,
             HttpServletRequest request
     ) {

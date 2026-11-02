@@ -1,5 +1,7 @@
 package com.dataforge.reserveflow.products.api;
 
+import com.dataforge.reserveflow.exceptions.InventoryCapacityExceededException;
+import com.dataforge.reserveflow.exceptions.InventoryConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.exceptions.ProductConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
@@ -7,6 +9,7 @@ import com.dataforge.reserveflow.products.ProductService;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -395,6 +398,174 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.fieldErrors.version").value("Version must be specified"));
 
         verifyNoInteractions(productService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, 8})
+    void restocksProduct(long expectedVersion) throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-02T20:03:45Z");
+        RestockProductCommand command = new RestockProductCommand(productId, 5, expectedVersion);
+        ProductInventory inventory = new ProductInventory(13, 3, expectedVersion + 1, now);
+
+        given(productService.restock(command)).willReturn(inventory);
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content(restockRequestJson(5, expectedVersion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.onHandQuantity").value(13))
+                .andExpect(jsonPath("$.reservedQuantity").value(3))
+                .andExpect(jsonPath("$.availableQuantity").value(10))
+                .andExpect(jsonPath("$.version").value(expectedVersion + 1))
+                .andExpect(jsonPath("$.updatedAt").value(now.toString()))
+                .andExpect(jsonPath("$.inventory").doesNotHaveJsonPath());
+
+        then(productService).should().restock(command);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void rejectsNonPositiveRestockQuantity(int quantity) throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-02T20:05:24Z");
+        given(clock.instant()).willReturn(now);
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content(restockRequestJson(quantity, 8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.path").value("/api/products/" + productId + "/inventory/restock"))
+                .andExpect(jsonPath("$.fieldErrors.quantity").value("Quantity must be greater than zero"));
+
+        verifyNoInteractions(productService);
+    }
+
+    @Test
+    void rejectsMissingRestockFields() throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-02T20:05:24Z");
+        given(clock.instant()).willReturn(now);
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.path").value("/api/products/" + productId + "/inventory/restock"))
+                .andExpect(jsonPath("$.fieldErrors.quantity").value("Quantity must be specified"))
+                .andExpect(jsonPath("$.fieldErrors.version").value("Version must be specified"));
+
+        verifyNoInteractions(productService);
+    }
+
+    @Test
+    void rejectsNegativeRestockVersion() throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-02T20:05:24Z");
+        given(clock.instant()).willReturn(now);
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content(restockRequestJson(5, -1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.path").value("/api/products/" + productId + "/inventory/restock"))
+                .andExpect(jsonPath("$.fieldErrors.version").value("Version must not be negative"));
+
+        verifyNoInteractions(productService);
+    }
+
+    @Test
+    void rejectsRestockOfUnknownProduct() throws Exception {
+        UUID productId = UUID.fromString("00000000-0000-0000-0000-000000000000");
+        Instant now = Instant.parse("2026-11-02T20:05:24Z");
+        RestockProductCommand command = new RestockProductCommand(productId, 5, 8);
+
+        given(clock.instant()).willReturn(now);
+        given(productService.restock(command)).willThrow(new ProductNotFoundException(productId));
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content(restockRequestJson(5, 8)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Product not found: " + productId))
+                .andExpect(jsonPath("$.path").value("/api/products/" + productId + "/inventory/restock"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(productService).should().restock(command);
+    }
+
+    @Test
+    void rejectsRestockWithOutdatedInventoryVersion() throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-02T20:05:24Z");
+        RestockProductCommand command = new RestockProductCommand(productId, 5, 8);
+
+        given(clock.instant()).willReturn(now);
+        given(productService.restock(command))
+                .willThrow(new InventoryConcurrentUpdateException(productId));
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content(restockRequestJson(5, 8)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value("Inventory was concurrently updated: " + productId))
+                .andExpect(jsonPath("$.path").value("/api/products/" + productId + "/inventory/restock"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(productService).should().restock(command);
+    }
+
+    @Test
+    void rejectsRestockExceedingInventoryCapacity() throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-02T20:05:24Z");
+        RestockProductCommand command = new RestockProductCommand(productId, Integer.MAX_VALUE, 8);
+
+        given(clock.instant()).willReturn(now);
+        given(productService.restock(command))
+                .willThrow(new InventoryCapacityExceededException(productId));
+
+        mockMvc.perform(post("/api/products/{productId}/inventory/restock", productId)
+                        .contentType(APPLICATION_JSON)
+                        .content(restockRequestJson(Integer.MAX_VALUE, 8)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value(
+                        "On-hand quantity must not exceed " + Integer.MAX_VALUE + " for product: " + productId
+                ))
+                .andExpect(jsonPath("$.path").value("/api/products/" + productId + "/inventory/restock"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(productService).should().restock(command);
+    }
+
+    private String restockRequestJson(int quantity, long version) {
+        return """
+                {
+                  "quantity": %d,
+                  "version": %d
+                }
+                """.formatted(quantity, version);
     }
 
     private Product updatedProduct(String description, long version) {

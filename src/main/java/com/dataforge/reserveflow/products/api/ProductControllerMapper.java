@@ -3,7 +3,9 @@ package com.dataforge.reserveflow.products.api;
 import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
 import com.dataforge.reserveflow.products.api.model.InventoryResponse;
 import com.dataforge.reserveflow.products.api.model.ProductResponse;
+import com.dataforge.reserveflow.products.api.model.RestockProductRequest;
 import com.dataforge.reserveflow.products.api.model.UpdateProductRequest;
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
@@ -25,6 +27,17 @@ public final class ProductControllerMapper {
                 request.price(),
                 request.currencyCode(),
                 request.initialQuantity()
+        );
+    }
+
+    public static RestockProductCommand toCommand(
+            UUID productId,
+            RestockProductRequest request
+    ) {
+        return new RestockProductCommand(
+                productId,
+                request.quantity(),
+                request.version()
         );
     }
 
@@ -60,7 +73,7 @@ public final class ProductControllerMapper {
         );
     }
 
-    private static InventoryResponse toInventoryResponse(ProductInventory inventory) {
+    public static InventoryResponse toInventoryResponse(ProductInventory inventory) {
         if (inventory == null) return null;
 
         return new InventoryResponse(

@@ -50,4 +50,24 @@ public interface ProductInventoryRepository extends JpaRepository<ProductInvento
             @Param("expectedVersion") long expectedVersion,
             @Param("updatedAt") Instant updatedAt
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = """
+            UPDATE product_inventory
+            SET on_hand_quantity = on_hand_quantity + :quantity,
+                version = version + 1,
+                updated_at = :updatedAt
+            WHERE product_id = :productId
+              AND version = :expectedVersion
+              AND on_hand_quantity <= 2147483647 - :quantity
+            """,
+            nativeQuery = true
+    )
+    int restock(
+            @Param("productId") UUID productId,
+            @Param("quantity") int quantity,
+            @Param("expectedVersion") long expectedVersion,
+            @Param("updatedAt") Instant updatedAt
+    );
 }

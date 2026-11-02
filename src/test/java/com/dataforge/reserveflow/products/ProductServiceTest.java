@@ -1,7 +1,9 @@
 package com.dataforge.reserveflow.products;
 
+import com.dataforge.reserveflow.exceptions.InvalidRestockQuantityException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
@@ -155,6 +157,34 @@ class ProductServiceTest {
         assertEquals(updatedProduct, result);
         then(productStorage).should().update(normalizedCommand, NOW);
         then(productStorage).shouldHaveNoMoreInteractions();
+    }
+
+    @Test
+    void restocksProductUsingCurrentTime() {
+        RestockProductCommand command = new RestockProductCommand(PRODUCT_ID, 5, 8);
+        ProductInventory inventory = new ProductInventory(13, 3, 9, NOW);
+
+        given(productStorage.restock(command, NOW)).willReturn(inventory);
+
+        ProductInventory result = productService.restock(command);
+
+        assertEquals(inventory, result);
+        then(productStorage).should().restock(command, NOW);
+        then(productStorage).shouldHaveNoMoreInteractions();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void rejectsNonPositiveRestockQuantity(int quantity) {
+        RestockProductCommand command = new RestockProductCommand(PRODUCT_ID, quantity, 8);
+
+        InvalidRestockQuantityException exception = assertThrows(
+                InvalidRestockQuantityException.class,
+                () -> productService.restock(command)
+        );
+
+        assertEquals("Restock quantity must be positive: " + quantity, exception.getMessage());
+        then(productStorage).shouldHaveNoInteractions();
     }
 
     private Product createProduct(ProductInventory inventory) {

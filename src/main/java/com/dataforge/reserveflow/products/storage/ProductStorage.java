@@ -1,7 +1,9 @@
 package com.dataforge.reserveflow.products.storage;
 
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
+import com.dataforge.reserveflow.products.model.ProductInventory;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -13,4 +15,5 @@ public interface ProductStorage {
     Optional<Product> findById(UUID productId);
     Optional<Product> findWithInventoryById(UUID productId);
     boolean existsBySku(String sku);
+    ProductInventory restock(RestockProductCommand command, Instant updatedAt);
 }

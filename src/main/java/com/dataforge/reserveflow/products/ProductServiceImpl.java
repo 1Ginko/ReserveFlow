@@ -1,7 +1,9 @@
 package com.dataforge.reserveflow.products;
 
+import com.dataforge.reserveflow.exceptions.InvalidRestockQuantityException;
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
@@ -87,5 +89,14 @@ public class ProductServiceImpl implements ProductService {
         );
 
         return productStorage.update(normalizedCommand, clock.instant());
+    }
+
+    @Override
+    public ProductInventory restock(RestockProductCommand command) {
+        if (command.quantity() <= 0) {
+            throw new InvalidRestockQuantityException(command.quantity());
+        }
+
+        return productStorage.restock(command, clock.instant());
     }
 }

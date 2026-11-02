@@ -2,12 +2,16 @@ package com.dataforge.reserveflow.products.api;
 
 import com.dataforge.reserveflow.products.ProductService;
 import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
+import com.dataforge.reserveflow.products.api.model.InventoryResponse;
 import com.dataforge.reserveflow.products.api.model.ProductQueryParams;
 import com.dataforge.reserveflow.products.api.model.ProductResponse;
+import com.dataforge.reserveflow.products.api.model.RestockProductRequest;
 import com.dataforge.reserveflow.products.api.model.UpdateProductRequest;
+import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
+import com.dataforge.reserveflow.products.model.ProductInventory;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,5 +62,15 @@ public class ProductController {
         UpdateProductCommand command = ProductControllerMapper.toCommand(productId, request);
         Product product = productService.update(command);
         return ProductControllerMapper.toResponse(product);
+    }
+
+    @PostMapping("/{productId}/inventory/restock")
+    public InventoryResponse restock(
+            @PathVariable UUID productId,
+            @Valid @RequestBody RestockProductRequest request
+    ) {
+        RestockProductCommand command = ProductControllerMapper.toCommand(productId, request);
+        ProductInventory inventory = productService.restock(command);
+        return ProductControllerMapper.toInventoryResponse(inventory);
     }
 }
