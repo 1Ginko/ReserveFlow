@@ -4,6 +4,8 @@ import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+import com.dataforge.reserveflow.products.model.ProductPage;
+import com.dataforge.reserveflow.products.queries.ProductListQuery;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -16,4 +18,5 @@ public interface ProductStorage {
     Optional<Product> findWithInventoryById(UUID productId);
     boolean existsBySku(String sku);
     ProductInventory restock(RestockProductCommand command, Instant updatedAt);
+    ProductPage findPage(ProductListQuery query);
 }

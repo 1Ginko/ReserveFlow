@@ -13,13 +13,17 @@ import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+import com.dataforge.reserveflow.products.model.ProductPage;
+import com.dataforge.reserveflow.products.queries.ProductListQuery;
 import com.dataforge.reserveflow.products.storage.ProductStorage;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,20 +43,25 @@ public class ProductStorageImpl implements ProductStorage {
 
     @Override
     public Optional<Product> findById(UUID productId) {
-        return productRepository.findById(productId)
-                .map(entity -> new Product(
-                        entity.getProductId(),
-                        entity.getSku(),
-                        entity.getName(),
-                        entity.getDescription(),
-                        entity.getPrice(),
-                        entity.getCurrencyCode(),
-                        entity.isActive(),
-                        entity.getVersion(),
-                        null,
-                        entity.getCreatedAt(),
-                        entity.getUpdatedAt()
-                ));
+        return productRepository.findById(productId).map(this::toProduct);
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public ProductPage findPage(ProductListQuery query) {
+        long offset = (long) query.page() * query.size();
+
+        List<ProductEntity> productEntities = productRepository.findPage(query.active(), query.size(), offset);
+        List<Product> items = productEntities.stream().map(this::toProduct).toList();
+
+        long totalElements = productRepository.countProducts(query.active());
+
+        return new ProductPage(
+                items,
+                query.page(),
+                query.size(),
+                totalElements
+        );
     }
 
     @Override
@@ -190,5 +199,23 @@ public class ProductStorageImpl implements ProductStorage {
         return false;
     }
 
+    private Product toProduct(ProductEntity entity) {
+        return new Product(
+                entity.getProductId(),
+                entity.getSku(),
+                entity.getName(),
+                entity.getDescription(),
+                entity.getPrice(),
+                entity.getCurrencyCode(),
+                entity.isActive(),
+                entity.getVersion(),
+                null,
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+
     private static final String UNIQUE_PRODUCT_SKU_CONSTRAINT = "uq_products_sku";
+
 }
+

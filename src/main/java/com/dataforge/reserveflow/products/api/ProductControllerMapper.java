@@ -1,16 +1,22 @@
 package com.dataforge.reserveflow.products.api;
 
-import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
-import com.dataforge.reserveflow.products.api.model.InventoryResponse;
-import com.dataforge.reserveflow.products.api.model.ProductResponse;
-import com.dataforge.reserveflow.products.api.model.RestockProductRequest;
-import com.dataforge.reserveflow.products.api.model.UpdateProductRequest;
+import com.dataforge.reserveflow.products.api.model.params.ProductListQueryParams;
+import com.dataforge.reserveflow.products.api.model.request.CreateProductRequest;
+import com.dataforge.reserveflow.products.api.model.response.InventoryResponse;
+import com.dataforge.reserveflow.products.api.model.response.ProductPageResponse;
+import com.dataforge.reserveflow.products.api.model.response.ProductResponse;
+import com.dataforge.reserveflow.products.api.model.request.RestockProductRequest;
+import com.dataforge.reserveflow.products.api.model.request.UpdateProductRequest;
 import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+import com.dataforge.reserveflow.products.model.ProductPage;
+import com.dataforge.reserveflow.products.queries.ProductListQuery;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.List;
 import java.util.UUID;
 
 public final class ProductControllerMapper {
@@ -82,6 +88,46 @@ public final class ProductControllerMapper {
                 inventory.availableQuantity(),
                 inventory.version(),
                 inventory.updatedAt()
+        );
+    }
+
+    public static ProductListQuery toQuery(ProductListQueryParams params) {
+        return new ProductListQuery(
+                params.page(),
+                params.size(),
+                params.active()
+        );
+    }
+
+    public static ProductPageResponse toResponse(ProductPage page, Boolean active) {
+        List<ProductResponse> items = page.items().stream()
+                .map(ProductControllerMapper::toResponse)
+                .toList();
+
+        long totalPages = Math.ceilDiv(page.totalElements(), page.size());
+        long nextPageNumber = (long) page.page() + 1;
+        String nextPage = null;
+
+        if (nextPageNumber < totalPages) {
+            UriComponentsBuilder builder = UriComponentsBuilder
+                    .fromPath("/api/products")
+                    .queryParam("page", nextPageNumber)
+                    .queryParam("size", page.size());
+
+            if (active != null) {
+                builder.queryParam("active", active);
+            }
+
+            nextPage = builder.build().encode().toUriString();
+        }
+
+        return new ProductPageResponse(
+                items,
+                page.page(),
+                page.size(),
+                page.totalElements(),
+                totalPages,
+                nextPage
         );
     }
 }

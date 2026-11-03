@@ -1,4 +1,4 @@
-package com.dataforge.reserveflow.products.api.model;
+package com.dataforge.reserveflow.products.api.model.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;

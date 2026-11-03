@@ -1,17 +1,21 @@
 package com.dataforge.reserveflow.products.api;
 
 import com.dataforge.reserveflow.products.ProductService;
-import com.dataforge.reserveflow.products.api.model.CreateProductRequest;
-import com.dataforge.reserveflow.products.api.model.InventoryResponse;
-import com.dataforge.reserveflow.products.api.model.ProductQueryParams;
-import com.dataforge.reserveflow.products.api.model.ProductResponse;
-import com.dataforge.reserveflow.products.api.model.RestockProductRequest;
-import com.dataforge.reserveflow.products.api.model.UpdateProductRequest;
+import com.dataforge.reserveflow.products.api.model.params.ProductListQueryParams;
+import com.dataforge.reserveflow.products.api.model.request.CreateProductRequest;
+import com.dataforge.reserveflow.products.api.model.response.InventoryResponse;
+import com.dataforge.reserveflow.products.api.model.params.ProductQueryParams;
+import com.dataforge.reserveflow.products.api.model.response.ProductPageResponse;
+import com.dataforge.reserveflow.products.api.model.response.ProductResponse;
+import com.dataforge.reserveflow.products.api.model.request.RestockProductRequest;
+import com.dataforge.reserveflow.products.api.model.request.UpdateProductRequest;
 import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+import com.dataforge.reserveflow.products.model.ProductPage;
+import com.dataforge.reserveflow.products.queries.ProductListQuery;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -72,5 +76,15 @@ public class ProductController {
         RestockProductCommand command = ProductControllerMapper.toCommand(productId, request);
         ProductInventory inventory = productService.restock(command);
         return ProductControllerMapper.toInventoryResponse(inventory);
+    }
+
+    @GetMapping
+    public ProductPageResponse findPage(
+            @Valid @ModelAttribute ProductListQueryParams params
+    ) {
+        ProductListQuery query = ProductControllerMapper.toQuery(params);
+        ProductPage page = productService.findPage(query);
+
+        return ProductControllerMapper.toResponse(page, query.active());
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -82,4 +83,37 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
             nativeQuery = true
     )
     Optional<ProductDetailsProjection> findWithInventoryById(@Param("productId") UUID productId);
+
+    @Query(
+            value = """
+            SELECT *
+            FROM products
+            WHERE (
+                CAST(:active AS BOOLEAN) IS NULL
+                OR active = CAST(:active AS BOOLEAN)
+            )
+            ORDER BY created_at DESC, product_id DESC
+            LIMIT :limit
+            OFFSET :offset
+            """,
+            nativeQuery = true
+    )
+    List<ProductEntity> findPage(
+            @Param("active") Boolean active,
+            @Param("limit") int limit,
+            @Param("offset") long offset
+    );
+
+    @Query(
+            value = """
+            SELECT COUNT(*)
+            FROM products
+            WHERE (
+                CAST(:active AS BOOLEAN) IS NULL
+                OR active = CAST(:active AS BOOLEAN)
+            )
+            """,
+            nativeQuery = true
+    )
+    long countProducts(@Param("active") Boolean active);
 }

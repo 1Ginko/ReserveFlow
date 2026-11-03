@@ -7,6 +7,8 @@ import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+import com.dataforge.reserveflow.products.model.ProductPage;
+import com.dataforge.reserveflow.products.queries.ProductListQuery;
 import com.dataforge.reserveflow.products.storage.ProductStorage;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,11 @@ public class ProductServiceImpl implements ProductService {
     ) {
         this.productStorage = productStorage;
         this.clock = clock;
+    }
+
+    @Override
+    public ProductPage findPage(ProductListQuery query) {
+        return productStorage.findPage(query);
     }
 
     public Product findById(UUID productId, boolean includeInventory) {
@@ -99,4 +106,5 @@ public class ProductServiceImpl implements ProductService {
 
         return productStorage.restock(command, clock.instant());
     }
+
 }

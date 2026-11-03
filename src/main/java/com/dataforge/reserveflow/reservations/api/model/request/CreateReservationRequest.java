@@ -1,4 +1,4 @@
-package com.dataforge.reserveflow.reservations.api.model;
+package com.dataforge.reserveflow.reservations.api.model.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

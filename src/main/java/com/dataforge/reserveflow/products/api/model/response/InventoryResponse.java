@@ -1,4 +1,4 @@
-package com.dataforge.reserveflow.products.api.model;
+package com.dataforge.reserveflow.products.api.model.response;
 
 import java.time.Instant;
 

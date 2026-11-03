@@ -1,4 +1,4 @@
-package com.dataforge.reserveflow.reservations.api.model;
+package com.dataforge.reserveflow.reservations.api.model.response;
 
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
 

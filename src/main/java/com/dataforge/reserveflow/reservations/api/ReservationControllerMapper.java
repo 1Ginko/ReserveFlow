@@ -1,7 +1,7 @@
 package com.dataforge.reserveflow.reservations.api;
 
-import com.dataforge.reserveflow.reservations.api.model.CreateReservationRequest;
-import com.dataforge.reserveflow.reservations.api.model.ReservationResponse;
+import com.dataforge.reserveflow.reservations.api.model.request.CreateReservationRequest;
+import com.dataforge.reserveflow.reservations.api.model.response.ReservationResponse;
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
 

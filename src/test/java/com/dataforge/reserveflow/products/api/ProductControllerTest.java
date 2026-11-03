@@ -8,11 +8,14 @@ import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
 import com.dataforge.reserveflow.products.ProductService;
 import com.dataforge.reserveflow.products.model.Product;
 import com.dataforge.reserveflow.products.model.ProductInventory;
+import com.dataforge.reserveflow.products.model.ProductPage;
+import com.dataforge.reserveflow.products.queries.ProductListQuery;
 import com.dataforge.reserveflow.products.commands.CreateProductCommand;
 import com.dataforge.reserveflow.products.commands.RestockProductCommand;
 import com.dataforge.reserveflow.products.commands.UpdateProductCommand;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -23,6 +26,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.nullValue;
@@ -557,6 +561,255 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.fieldErrors").isEmpty());
 
         then(productService).should().restock(command);
+    }
+
+    @Test
+    void listsProductsWithDefaultPagination() throws Exception {
+        Product firstProduct = secondProduct();
+        Product secondProduct = createProduct(null);
+        ProductListQuery query = new ProductListQuery(0, 20, null);
+        ProductPage page = new ProductPage(List.of(firstProduct, secondProduct), 0, 20, 2);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].productId").value(firstProduct.productId().toString()))
+                .andExpect(jsonPath("$.items[0].sku").value("PHONE-002"))
+                .andExpect(jsonPath("$.items[0].price").value(499.99))
+                .andExpect(jsonPath("$.items[0].version").value(0))
+                .andExpect(jsonPath("$.items[0].inventory").doesNotHaveJsonPath())
+                .andExpect(jsonPath("$.items[1].productId").value(secondProduct.productId().toString()))
+                .andExpect(jsonPath("$.items[1].sku").value("PHONE-001"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.nextPage").value(nullValue()));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void linksToNextProductPage() throws Exception {
+        Product product = secondProduct();
+        ProductListQuery query = new ProductListQuery(0, 1, null);
+        ProductPage page = new ProductPage(List.of(product), 0, 1, 2);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products")
+                        .param("page", "0")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].sku").value("PHONE-002"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.nextPage").value("/api/products?page=1&size=1"));
+
+        then(productService).should().findPage(query);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void preservesActiveFilterInNextPageLink(boolean active) throws Exception {
+        Product product = active ? createProduct(null) : updatedProduct("Updated product", 4);
+        ProductListQuery query = new ProductListQuery(0, 1, active);
+        ProductPage page = new ProductPage(List.of(product), 0, 1, 2);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products")
+                        .param("size", "1")
+                        .param("active", Boolean.toString(active)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].active").value(active))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.nextPage").value("/api/products?page=1&size=1&active=" + active));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void returnsLastProductPageWithoutNextLink() throws Exception {
+        Product product = createProduct(null);
+        ProductListQuery query = new ProductListQuery(1, 1, null);
+        ProductPage page = new ProductPage(List.of(product), 1, 1, 2);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products")
+                        .param("page", "1")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].sku").value("PHONE-001"))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.nextPage").value(nullValue()));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void roundsUpProductPageCount() throws Exception {
+        ProductListQuery query = new ProductListQuery(0, 2, null);
+        ProductPage page = new ProductPage(List.of(secondProduct(), createProduct(null)), 0, 2, 3);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products")
+                        .param("page", "0")
+                        .param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.nextPage").value("/api/products?page=1&size=2"));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void returnsEmptyListWhenNoProductsMatch() throws Exception {
+        ProductListQuery query = new ProductListQuery(0, 20, false);
+        ProductPage page = new ProductPage(List.of(), 0, 20, 0);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products").param("active", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.nextPage").value(nullValue()));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void returnsEmptyPagePastLastProduct() throws Exception {
+        ProductListQuery query = new ProductListQuery(3, 1, null);
+        ProductPage page = new ProductPage(List.of(), 3, 1, 2);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products")
+                        .param("page", "3")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.page").value(3))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.nextPage").value(nullValue()));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void usesDefaultSizeWhenOnlyPageIsSpecified() throws Exception {
+        ProductListQuery query = new ProductListQuery(1, 20, null);
+        ProductPage page = new ProductPage(List.of(), 1, 20, 0);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products").param("page", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.nextPage").value(nullValue()));
+
+        then(productService).should().findPage(query);
+    }
+
+    @Test
+    void acceptsMaximumProductPageSize() throws Exception {
+        ProductListQuery query = new ProductListQuery(0, 100, null);
+        ProductPage page = new ProductPage(List.of(), 0, 100, 0);
+
+        given(productService.findPage(query)).willReturn(page);
+
+        mockMvc.perform(get("/api/products").param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(100));
+
+        then(productService).should().findPage(query);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "page, -1, Page must not be negative",
+            "size, 0, Size must be greater than zero",
+            "size, -1, Size must be greater than zero",
+            "size, 101, Size must not exceed 100"
+    })
+    void rejectsInvalidPagination(String parameter, String value, String message) throws Exception {
+        Instant now = Instant.parse("2026-11-03T20:00:00Z");
+        given(clock.instant()).willReturn(now);
+
+        mockMvc.perform(get("/api/products").param(parameter, value))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.path").value("/api/products"))
+                .andExpect(jsonPath("$.fieldErrors." + parameter).value(message));
+
+        verifyNoInteractions(productService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "page, abc",
+            "size, abc",
+            "active, unknown"
+    })
+    void rejectsMalformedListParameters(String parameter, String value) throws Exception {
+        Instant now = Instant.parse("2026-11-03T20:00:00Z");
+        given(clock.instant()).willReturn(now);
+
+        mockMvc.perform(get("/api/products").param(parameter, value))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.path").value("/api/products"))
+                .andExpect(jsonPath("$.fieldErrors." + parameter).isString());
+
+        verifyNoInteractions(productService);
+    }
+
+    private Product secondProduct() {
+        Instant createdAt = Instant.parse("2026-11-03T19:52:41Z");
+
+        return new Product(
+                UUID.fromString("fcc1186a-bae6-460a-adfd-a16b843ae3ec"),
+                "PHONE-002",
+                "Second smartphone",
+                "Pagination test",
+                new BigDecimal("499.99"),
+                "USD",
+                true,
+                0,
+                null,
+                createdAt,
+                createdAt
+        );
     }
 
     private String restockRequestJson(int quantity, long version) {
