@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ReservationRepository extends JpaRepository<ReservationEntity, UUID> {
@@ -90,5 +91,54 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
             @Param("reservationId") UUID reservationId,
             @Param("expectedVersion") long expectedVersion,
             @Param("expiredAt") Instant expiredAt
+    );
+
+    @Query(
+            value = """
+            SELECT *
+            FROM reservations
+            WHERE idempotency_key = :idempotencyKey
+            """,
+            nativeQuery = true
+    )
+    Optional<ReservationEntity> findByIdempotencyKey(@Param("idempotencyKey") UUID idempotencyKey);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = """
+            INSERT INTO reservations (
+                reservation_id,
+                product_id,
+                idempotency_key,
+                quantity,
+                reservation_status,
+                expires_at,
+                version,
+                created_at,
+                updated_at
+            )
+            SELECT
+                :reservationId,
+                p.product_id,
+                :idempotencyKey,
+                :quantity,
+                'ACTIVE',
+                :expiresAt,
+                0,
+                :createdAt,
+                :createdAt
+            FROM products p
+            WHERE p.product_id = :productId
+            ON CONFLICT (idempotency_key) DO NOTHING
+            """,
+            nativeQuery = true
+    )
+    int insertIfAbsent(
+            @Param("reservationId") UUID reservationId,
+            @Param("productId") UUID productId,
+            @Param("idempotencyKey") UUID idempotencyKey,
+            @Param("quantity") int quantity,
+            @Param("expiresAt") Instant expiresAt,
+            @Param("createdAt") Instant createdAt
     );
 }

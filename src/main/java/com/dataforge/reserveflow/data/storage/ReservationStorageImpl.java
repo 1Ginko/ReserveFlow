@@ -15,10 +15,12 @@ import com.dataforge.reserveflow.exceptions.ReservationExpiredException;
 import com.dataforge.reserveflow.exceptions.ReservationNotActiveException;
 import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import com.dataforge.reserveflow.reservations.model.ReservationExpirationCandidate;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
 import com.dataforge.reserveflow.reservations.storage.ReservationStorage;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -45,17 +47,12 @@ public class ReservationStorageImpl implements ReservationStorage {
 
     @Override
     public Optional<Reservation> findById(UUID reservationId) {
-        return reservationRepository.findById(reservationId)
-                .map(entity -> new Reservation(
-                        entity.getReservationId(),
-                        entity.getProductId(),
-                        entity.getQuantity(),
-                        entity.getStatus(),
-                        entity.getExpiresAt(),
-                        entity.getVersion(),
-                        entity.getCreatedAt(),
-                        entity.getUpdatedAt()
-                ));
+        return reservationRepository.findById(reservationId).map(this::toReservation);
+    }
+
+    @Override
+    public Optional<Reservation> findByIdempotencyKey(UUID idempotencyKey) {
+        return reservationRepository.findByIdempotencyKey(idempotencyKey).map(this::toReservation);
     }
 
     @Override
@@ -178,8 +175,29 @@ public class ReservationStorageImpl implements ReservationStorage {
     }
 
     @Override
-    @Transactional
-    public void create(Reservation reservation) {
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ReservationCreationResult create(Reservation reservation, UUID idempotencyKey) {
+        // 1. Insert first so the unique key coordinates concurrent retries.
+        // Any later failure rolls back both this insert and the inventory update.
+        int insertedRows = reservationRepository.insertIfAbsent(
+                reservation.reservationId(),
+                reservation.productId(),
+                idempotencyKey,
+                reservation.quantity(),
+                reservation.expiresAt(),
+                reservation.createdAt()
+        );
+
+        // 2. Return an existing reservation before checking the current product state.
+        // If no reservation has this key, the INSERT found no matching product.
+        if (insertedRows == 0) {
+            Reservation existing = findByIdempotencyKey(idempotencyKey)
+                    .orElseThrow(() -> new ProductNotFoundException(reservation.productId()));
+
+            return new ReservationCreationResult(existing, false);
+        }
+
+        // 3. Validate the product only for a newly inserted reservation.
         ProductEntity product = productRepository
                 .findById(reservation.productId())
                 .orElseThrow(() -> new ProductNotFoundException(reservation.productId()));
@@ -188,6 +206,7 @@ public class ReservationStorageImpl implements ReservationStorage {
             throw new ProductInactiveException(reservation.productId());
         }
 
+        // 4. Load inventory and check availability before calculating the reserved amount.
         ProductInventoryEntity productInventory = inventoryRepository
                 .findById(reservation.productId())
                 .orElseThrow(() -> {
@@ -196,6 +215,8 @@ public class ReservationStorageImpl implements ReservationStorage {
                 });
 
         int newReservedQuantity = getNewReservedQuantity(reservation, productInventory);
+
+        // 5. Match the inventory version to reject updates based on stale stock.
         int updatedRows = inventoryRepository.updateReservedQuantity(
                 reservation.productId(),
                 newReservedQuantity,
@@ -207,14 +228,10 @@ public class ReservationStorageImpl implements ReservationStorage {
             throw new InventoryConcurrentUpdateException(reservation.productId());
         }
 
-        ReservationEntity reservationEntity = new ReservationEntity(
-                reservation.reservationId(),
-                reservation.productId(),
-                reservation.quantity(),
-                reservation.expiresAt(),
-                reservation.createdAt()
-        );
-        reservationRepository.save(reservationEntity);
+        // 6. Read back the created reservation with the values stored in the database.
+        Reservation created = findById(reservation.reservationId())
+                .orElseThrow(() -> new IllegalStateException("Reservation not found after insert: " + reservation.reservationId()));
+        return new ReservationCreationResult(created, true);
     }
 
     private static int getNewReservedQuantity(Reservation reservation, ProductInventoryEntity productInventory) {
@@ -226,5 +243,18 @@ public class ReservationStorageImpl implements ReservationStorage {
 
         int alreadyReservedQuantity = productInventory.getReservedQuantity();
         return alreadyReservedQuantity + requestedQuantity;
+    }
+
+    private Reservation toReservation(ReservationEntity entity) {
+        return new Reservation(
+                entity.getReservationId(),
+                entity.getProductId(),
+                entity.getQuantity(),
+                entity.getStatus(),
+                entity.getExpiresAt(),
+                entity.getVersion(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
     }
 }

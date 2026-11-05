@@ -1,6 +1,7 @@
 package com.dataforge.reserveflow.reservations.storage;
 
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import com.dataforge.reserveflow.reservations.model.ReservationExpirationCandidate;
 
 import java.time.Instant;
@@ -10,7 +11,7 @@ import java.util.UUID;
 
 public interface ReservationStorage {
 
-    void create(Reservation reservation);
+    ReservationCreationResult create(Reservation reservation, UUID idempotencyKey);
 
     void cancel(UUID reservationId, Instant cancelledAt);
 
@@ -19,6 +20,8 @@ public interface ReservationStorage {
     List<ReservationExpirationCandidate> findExpiredReservations(Instant now, int batchSize);
 
     Optional<Reservation> findById(UUID reservationId);
+
+    Optional<Reservation> findByIdempotencyKey(UUID idempotencyKey);
 
     boolean expire(ReservationExpirationCandidate candidate, Instant expiredAt);
 }

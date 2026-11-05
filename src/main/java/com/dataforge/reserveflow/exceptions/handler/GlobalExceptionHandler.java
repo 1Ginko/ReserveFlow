@@ -1,5 +1,6 @@
 package com.dataforge.reserveflow.exceptions.handler;
 
+import com.dataforge.reserveflow.exceptions.IdempotencyKeyConflictException;
 import com.dataforge.reserveflow.exceptions.InsufficientStockException;
 import com.dataforge.reserveflow.exceptions.InvalidIncludeException;
 import com.dataforge.reserveflow.exceptions.InvalidReservationQuantityException;
@@ -92,6 +93,7 @@ public class GlobalExceptionHandler {
             InsufficientStockException.class,
             ReservationExpiredException.class,
             ReservationNotActiveException.class,
+            IdempotencyKeyConflictException.class,
             InventoryCapacityExceededException.class,
             ProductConcurrentUpdateException.class,
             InventoryConcurrentUpdateException.class,

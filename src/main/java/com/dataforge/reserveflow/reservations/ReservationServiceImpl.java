@@ -1,9 +1,11 @@
 package com.dataforge.reserveflow.reservations;
 
+import com.dataforge.reserveflow.exceptions.IdempotencyKeyConflictException;
 import com.dataforge.reserveflow.exceptions.InvalidReservationQuantityException;
 import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
 import com.dataforge.reserveflow.reservations.storage.ReservationStorage;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -38,8 +41,13 @@ public class ReservationServiceImpl implements ReservationService {
         reservationStorage.cancel(reservationId, clock.instant());
     }
 
-    public Reservation create(CreateReservationCommand command) {
-        if (command.quantity() <= 0) throw new InvalidReservationQuantityException(command.quantity());
+    @Override
+    public ReservationCreationResult create(CreateReservationCommand command) {
+        Objects.requireNonNull(command.idempotencyKey(), "Idempotency key must be specified");
+
+        if (command.quantity() <= 0) {
+            throw new InvalidReservationQuantityException(command.quantity());
+        }
 
         Instant now = clock.instant();
         Reservation reservation = new Reservation(
@@ -52,7 +60,20 @@ public class ReservationServiceImpl implements ReservationService {
                 now,
                 now
         );
-        reservationStorage.create(reservation);
-        return reservation;
+
+        ReservationCreationResult result = reservationStorage.create(reservation, command.idempotencyKey());
+
+        if (!result.created()) {
+            Reservation existing = result.reservation();
+            boolean sameProduct = existing.productId().equals(command.productId());
+            boolean sameQuantity = existing.quantity() == command.quantity();
+            boolean sameRequestParameters = sameProduct && sameQuantity;
+
+            if (!sameRequestParameters) {
+                throw new IdempotencyKeyConflictException(command.idempotencyKey());
+            }
+        }
+
+        return result;
     }
 }

@@ -37,6 +37,9 @@ public class ReservationEntity {
     @Column(name = RESERVATION_VERSION, nullable = false)
     private long version;
 
+    @Column(name = IDEMPOTENCY_KEY, updatable = false)
+    private UUID idempotencyKey;
+
     @Column(name = CREATED_AT, nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -94,6 +97,10 @@ public class ReservationEntity {
         return updatedAt;
     }
 
+    public UUID getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
     static final String RESERVATION_TABLE = "reservations";
     static final String RESERVATION_ID = "reservation_id";
     static final String PRODUCT_ID = "product_id";
@@ -103,4 +110,5 @@ public class ReservationEntity {
     static final String RESERVATION_VERSION = "version";
     static final String CREATED_AT = "created_at";
     static final String UPDATED_AT = "updated_at";
+    static final String IDEMPOTENCY_KEY = "idempotency_key";
 }

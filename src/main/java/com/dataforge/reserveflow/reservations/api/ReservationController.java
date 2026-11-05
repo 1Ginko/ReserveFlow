@@ -5,12 +5,15 @@ import com.dataforge.reserveflow.reservations.api.model.request.CreateReservatio
 import com.dataforge.reserveflow.reservations.api.model.response.ReservationResponse;
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,10 +49,18 @@ public class ReservationController {
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ReservationResponse create(@Valid @RequestBody CreateReservationRequest request) {
-        CreateReservationCommand command = ReservationControllerMapper.toCommand(request);
-        Reservation reservation = reservationService.create(command);
-        return ReservationControllerMapper.toResponse(reservation);
+    public ResponseEntity<ReservationResponse> create(
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey,
+            @Valid @RequestBody CreateReservationRequest request
+    ) {
+        CreateReservationCommand command = ReservationControllerMapper.toCommand(idempotencyKey, request);
+        ReservationCreationResult result = reservationService.create(command);
+        ReservationResponse response = ReservationControllerMapper.toResponse(result.reservation());
+
+        HttpStatus status = result.created()
+                ? HttpStatus.CREATED
+                : HttpStatus.OK;
+
+        return ResponseEntity.status(status).body(response);
     }
 }

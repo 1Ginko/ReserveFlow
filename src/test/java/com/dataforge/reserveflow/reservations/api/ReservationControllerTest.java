@@ -1,5 +1,6 @@
 package com.dataforge.reserveflow.reservations.api;
 
+import com.dataforge.reserveflow.exceptions.IdempotencyKeyConflictException;
 import com.dataforge.reserveflow.exceptions.InsufficientStockException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
 import com.dataforge.reserveflow.exceptions.ReservationConcurrentUpdateException;
@@ -9,8 +10,11 @@ import com.dataforge.reserveflow.exceptions.ReservationNotFoundException;
 import com.dataforge.reserveflow.reservations.ReservationService;
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
+import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,6 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ReservationController.class)
 class ReservationControllerTest {
+
+    private static final UUID IDEMPOTENCY_KEY = UUID.fromString("8fa9556c-2c2f-4b34-9af5-f9f020aa9a15");
 
     @Autowired
     private MockMvc mockMvc;
@@ -111,8 +117,9 @@ class ReservationControllerTest {
         then(reservationService).should().findById(reservationId);
     }
 
-    @Test
-    void createsReservation() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void createsOrReplaysReservation(boolean created) throws Exception {
         UUID reservationId =
                 UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
 
@@ -123,7 +130,7 @@ class ReservationControllerTest {
         Instant expiresAt = Instant.parse("2026-10-24T08:40:16Z");
 
         CreateReservationCommand command =
-                new CreateReservationCommand(productId, 3);
+                new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 3);
 
         Reservation reservation = new Reservation(
                 reservationId,
@@ -136,17 +143,14 @@ class ReservationControllerTest {
                 createdAt
         );
 
-        given(reservationService.create(command)).willReturn(reservation);
+        given(reservationService.create(command))
+                .willReturn(new ReservationCreationResult(reservation, created));
 
         mockMvc.perform(post("/api/reservations")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
                         .contentType(APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "productId": "d479265e-8dec-4cfc-b5e8-ab0141e44b3a",
-                                  "quantity": 3
-                                }
-                                """))
-                .andExpect(status().isCreated())
+                        .content(validCreateRequestJson()))
+                .andExpect(status().is(created ? 201 : 200))
                 .andExpect(jsonPath("$.reservationId")
                         .value(reservationId.toString()))
                 .andExpect(jsonPath("$.productId")
@@ -159,6 +163,60 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.updatedAt").value(createdAt.toString()));
 
         then(reservationService).should().create(command);
+    }
+
+    @Test
+    void rejectsReusedKeyWithDifferentParameters() throws Exception {
+        UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
+        Instant now = Instant.parse("2026-11-04T12:00:00Z");
+        CreateReservationCommand command = new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 4);
+
+        given(clock.instant()).willReturn(now);
+        given(reservationService.create(command))
+                .willThrow(new IdempotencyKeyConflictException(IDEMPOTENCY_KEY));
+
+        mockMvc.perform(post("/api/reservations")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productId": "d479265e-8dec-4cfc-b5e8-ab0141e44b3a",
+                                  "quantity": 4
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.timestamp").value(now.toString()))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value(
+                        "Idempotency key was already used with different parameters: " + IDEMPOTENCY_KEY
+                ))
+                .andExpect(jsonPath("$.path").value("/api/reservations"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+
+        then(reservationService).should().create(command);
+    }
+
+    @Test
+    void rejectsMissingIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/reservations")
+                        .contentType(APPLICATION_JSON)
+                        .content(validCreateRequestJson()))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(reservationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not-a-uuid", ""})
+    void rejectsInvalidIdempotencyKey(String idempotencyKey) throws Exception {
+        mockMvc.perform(post("/api/reservations")
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(APPLICATION_JSON)
+                        .content(validCreateRequestJson()))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(reservationService);
     }
 
     @Test
@@ -383,6 +441,7 @@ class ReservationControllerTest {
         given(clock.instant()).willReturn(now);
 
         mockMvc.perform(post("/api/reservations")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {
@@ -409,13 +468,14 @@ class ReservationControllerTest {
 
         Instant now = Instant.parse("2026-10-24T08:34:00Z");
         CreateReservationCommand command =
-                new CreateReservationCommand(productId, 1);
+                new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 1);
 
         given(clock.instant()).willReturn(now);
         given(reservationService.create(command))
                 .willThrow(new ProductNotFoundException(productId));
 
         mockMvc.perform(post("/api/reservations")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {
@@ -442,13 +502,14 @@ class ReservationControllerTest {
 
         Instant now = Instant.parse("2026-10-24T08:35:00Z");
         CreateReservationCommand command =
-                new CreateReservationCommand(productId, 100);
+                new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 100);
 
         given(clock.instant()).willReturn(now);
         given(reservationService.create(command))
                 .willThrow(new InsufficientStockException(productId, 100, 7));
 
         mockMvc.perform(post("/api/reservations")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {
@@ -468,5 +529,14 @@ class ReservationControllerTest {
                 .andExpect(jsonPath("$.fieldErrors").isEmpty());
 
         then(reservationService).should().create(command);
+    }
+
+    private String validCreateRequestJson() {
+        return """
+                {
+                  "productId": "d479265e-8dec-4cfc-b5e8-ab0141e44b3a",
+                  "quantity": 3
+                }
+                """;
     }
 }

@@ -5,15 +5,19 @@ import com.dataforge.reserveflow.reservations.api.model.response.ReservationResp
 import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
 
+import java.util.UUID;
+
 public final class ReservationControllerMapper {
 
     private ReservationControllerMapper() {}
 
     public static CreateReservationCommand toCommand(
+            UUID idempotencyKey,
             CreateReservationRequest request
     ) {
         return new CreateReservationCommand(
                 request.productId(),
+                idempotencyKey,
                 request.quantity()
         );
     }
