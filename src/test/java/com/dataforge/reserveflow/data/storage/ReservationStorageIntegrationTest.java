@@ -8,6 +8,7 @@ import com.dataforge.reserveflow.data.repository.ProductInventoryRepository;
 import com.dataforge.reserveflow.data.repository.ProductRepository;
 import com.dataforge.reserveflow.data.repository.ReservationRepository;
 import com.dataforge.reserveflow.exceptions.InsufficientStockException;
+import com.dataforge.reserveflow.exceptions.InventoryConcurrentUpdateException;
 import com.dataforge.reserveflow.reservations.model.Reservation;
 import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
@@ -26,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -34,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,6 +48,7 @@ class ReservationStorageIntegrationTest {
     private static final UUID RESERVATION_ID = UUID.fromString("6cfe755a-a85b-4ba3-80cd-d05451686746");
     private static final UUID SECOND_RESERVATION_ID = UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
     private static final UUID IDEMPOTENCY_KEY = UUID.fromString("8fa9556c-2c2f-4b34-9af5-f9f020aa9a15");
+    private static final UUID SECOND_IDEMPOTENCY_KEY = UUID.fromString("b83d6636-4d6d-4ee1-a9e9-c53ce8e619b6");
     private static final Instant NOW = Instant.parse("2026-11-05T12:00:00.123456Z");
 
     @Autowired
@@ -193,6 +197,70 @@ class ReservationStorageIntegrationTest {
                 assertEquals(10, inventory.getOnHandQuantity());
                 assertEquals(3, inventory.getReservedQuantity());
                 assertEquals(7, inventory.getAvailableQuantity());
+                assertEquals(1L, inventory.getVersion());
+            } finally {
+                allowCommit.complete(null);
+            }
+        }
+    }
+
+    @Test
+    void concurrentReservationsCannotReserveMoreThanAvailableStock() throws Exception {
+        Reservation firstRequest = reservation(RESERVATION_ID, 7, NOW);
+        Reservation secondRequest = reservation(SECOND_RESERVATION_ID, 7, NOW.plusSeconds(60));
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+
+        CompletableFuture<Integer> firstTransactionPid = new CompletableFuture<>();
+        CompletableFuture<Void> allowCommit = new CompletableFuture<>();
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            try {
+                CompletableFuture<ReservationCreationResult> first = CompletableFuture.supplyAsync(
+                        () -> transaction.execute(status -> {
+                            ReservationCreationResult result = reservationStorage.create(firstRequest, IDEMPOTENCY_KEY);
+                            firstTransactionPid.complete(jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                            // Keep the stock change uncommitted so the second request reads the old version.
+                            allowCommit.join();
+                            return result;
+                        }),
+                        executor
+                );
+                first.whenComplete((result, failure) -> {
+                    if (failure != null) {
+                        firstTransactionPid.completeExceptionally(failure);
+                    }
+                });
+
+                int blockingPid = firstTransactionPid.get(10, TimeUnit.SECONDS);
+                Future<ReservationCreationResult> second = executor.submit(
+                        () -> reservationStorage.create(secondRequest, SECOND_IDEMPOTENCY_KEY)
+                );
+
+                await().alias("second reservation waits to update inventory using the old version")
+                        .atMost(10, TimeUnit.SECONDS)
+                        .until(() -> isAnotherTransactionBlockedBy(blockingPid));
+
+                allowCommit.complete(null);
+                ReservationCreationResult firstResult = first.get(10, TimeUnit.SECONDS);
+                assertTrue(firstResult.created());
+                assertEquals(firstRequest, firstResult.reservation());
+
+                ExecutionException failure = assertThrows(
+                        ExecutionException.class,
+                        () -> second.get(10, TimeUnit.SECONDS)
+                );
+                assertInstanceOf(InventoryConcurrentUpdateException.class, failure.getCause());
+
+                assertEquals(1L, reservationRepository.count());
+                ReservationEntity stored = reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY).orElseThrow();
+                assertEquals(RESERVATION_ID, stored.getReservationId());
+                assertTrue(reservationRepository.findByIdempotencyKey(SECOND_IDEMPOTENCY_KEY).isEmpty());
+
+                ProductInventoryEntity inventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
+                assertEquals(10, inventory.getOnHandQuantity());
+                assertEquals(7, inventory.getReservedQuantity());
+                assertEquals(3, inventory.getAvailableQuantity());
                 assertEquals(1L, inventory.getVersion());
             } finally {
                 allowCommit.complete(null);
