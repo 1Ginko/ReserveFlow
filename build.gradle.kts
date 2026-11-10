@@ -51,6 +51,12 @@ dependencies {
 
     // JUnit launcher
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Spring Boot integration with test containers
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+
+    // PostgreSQL test container
+    testImplementation("org.testcontainers:testcontainers-postgresql")
 }
 
 tasks.withType<Test> {
