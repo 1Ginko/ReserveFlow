@@ -1,6 +1,6 @@
 package com.dataforge.authapi.data.entity;
 
-import com.dataforge.authapi.users.model.UserRole;
+import com.dataforge.authapi.auth.model.UserRole;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

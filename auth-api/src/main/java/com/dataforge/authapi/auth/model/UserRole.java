@@ -1,4 +1,4 @@
-package com.dataforge.authapi.users.model;
+package com.dataforge.authapi.auth.model;
 
 public enum UserRole {
     USER,
