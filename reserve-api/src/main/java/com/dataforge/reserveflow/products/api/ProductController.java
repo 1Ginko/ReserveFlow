@@ -79,9 +79,7 @@ public class ProductController {
     }
 
     @GetMapping
-    public ProductPageResponse findPage(
-            @Valid @ModelAttribute ProductListQueryParams params
-    ) {
+    public ProductPageResponse findPage(@Valid @ModelAttribute ProductListQueryParams params) {
         ProductListQuery query = ProductControllerMapper.toQuery(params);
         ProductPage page = productService.findPage(query);
 
