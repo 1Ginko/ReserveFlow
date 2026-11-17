@@ -1,5 +1,6 @@
 package com.dataforge.reserveflow.products.api;
 
+import com.dataforge.reserveflow.config.SecurityConfig;
 import com.dataforge.reserveflow.exceptions.InventoryCapacityExceededException;
 import com.dataforge.reserveflow.exceptions.InventoryConcurrentUpdateException;
 import com.dataforge.reserveflow.exceptions.ProductAlreadyExistsException;
@@ -19,6 +20,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -41,6 +45,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ProductController.class)
+@Import(SecurityConfig.class)
+@WithMockUser(roles = "ADMIN")
 class ProductControllerTest {
 
     @Autowired
@@ -51,6 +57,9 @@ class ProductControllerTest {
 
     @MockitoBean
     private Clock clock;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @Test
     void findsProductWithoutInventory() throws Exception {

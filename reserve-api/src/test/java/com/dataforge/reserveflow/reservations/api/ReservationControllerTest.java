@@ -1,5 +1,6 @@
 package com.dataforge.reserveflow.reservations.api;
 
+import com.dataforge.reserveflow.config.SecurityConfig;
 import com.dataforge.reserveflow.exceptions.IdempotencyKeyConflictException;
 import com.dataforge.reserveflow.exceptions.InsufficientStockException;
 import com.dataforge.reserveflow.exceptions.ProductNotFoundException;
@@ -17,6 +18,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,6 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ReservationController.class)
+@Import(SecurityConfig.class)
+@WithMockUser(roles = "USER")
 class ReservationControllerTest {
 
     private static final UUID IDEMPOTENCY_KEY = UUID.fromString("8fa9556c-2c2f-4b34-9af5-f9f020aa9a15");
@@ -48,6 +54,9 @@ class ReservationControllerTest {
 
     @MockitoBean
     private Clock clock;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @Test
     void findsReservationById() throws Exception {

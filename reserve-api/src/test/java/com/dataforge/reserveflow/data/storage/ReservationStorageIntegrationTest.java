@@ -1,5 +1,6 @@
 package com.dataforge.reserveflow.data.storage;
 
+import com.dataforge.reserveflow.config.JwtTestConfiguration;
 import com.dataforge.reserveflow.config.PostgresTestConfiguration;
 import com.dataforge.reserveflow.data.entity.ProductEntity;
 import com.dataforge.reserveflow.data.entity.ProductInventoryEntity;
@@ -41,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = "app.reservation-expiration.enabled=false")
-@Import(PostgresTestConfiguration.class)
+@Import({PostgresTestConfiguration.class, JwtTestConfiguration.class})
 class ReservationStorageIntegrationTest {
 
     private static final UUID PRODUCT_ID = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");

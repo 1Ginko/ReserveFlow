@@ -34,6 +34,9 @@ dependencies {
     // PostgreSQL migrations
     implementation("org.flywaydb:flyway-database-postgresql")
 
+    // JWT authentication
+    implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+
     // PostgreSQL JDBC driver
     runtimeOnly("org.postgresql:postgresql")
 
@@ -57,6 +60,10 @@ dependencies {
 
     // PostgreSQL test container
     testImplementation("org.testcontainers:testcontainers-postgresql")
+
+    // JWT security tests
+    testImplementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test")
+
 }
 
 tasks.withType<Test> {

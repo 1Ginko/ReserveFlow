@@ -58,8 +58,14 @@ services:
       RESERVE_POSTGRES_USER: ${RESERVE_POSTGRES_USER}
       RESERVE_POSTGRES_PASSWORD: ${RESERVE_POSTGRES_PASSWORD}
 
+      RESERVE_JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt/public.pem
+      RESERVE_JWT_ISSUER: ${AUTH_JWT_ISSUER}
+      RESERVE_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE}
+
     ports:
       - "8080:8080"
+    volumes:
+      - ./secrets/jwt/public.pem:/run/secrets/jwt/public.pem:ro
 
     depends_on:
       reserve-postgres:
