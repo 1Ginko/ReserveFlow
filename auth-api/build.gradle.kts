@@ -19,6 +19,10 @@ repositories {
 }
 
 dependencies {
+
+    // JWT creation and signing
+    implementation("org.springframework.security:spring-security-oauth2-jose")
+
     // JPA and Hibernate
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 

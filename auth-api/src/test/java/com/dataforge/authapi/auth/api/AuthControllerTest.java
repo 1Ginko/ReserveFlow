@@ -1,8 +1,11 @@
 package com.dataforge.authapi.auth.api;
 
 import com.dataforge.authapi.auth.AuthService;
+import com.dataforge.authapi.auth.commands.LoginUserCommand;
 import com.dataforge.authapi.auth.commands.RegisterUserCommand;
+import com.dataforge.authapi.auth.model.AccessToken;
 import com.dataforge.authapi.config.SecurityConfig;
+import com.dataforge.authapi.exceptions.InvalidCredentialsException;
 import com.dataforge.authapi.exceptions.UserAlreadyExistsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,7 @@ class AuthControllerTest {
     private static final String EMAIL = "oleg@example.com";
     private static final String PASSWORD = "my-long-password-123";
     private static final Instant NOW = Instant.parse("2026-11-12T10:00:00Z");
+    private static final Instant EXPIRES_AT = NOW.plusSeconds(300);
 
     @Autowired
     private MockMvc mockMvc;
@@ -191,6 +195,143 @@ class AuthControllerTest {
                         .value("Password must contain at least 15 characters"));
 
         verifyNoInteractions(authService);
+    }
+
+    @ParameterizedTest
+    @MethodSource("validLoginPasswords")
+    void logsInWithoutAuthenticationAndReturnsAccessToken(String password) throws Exception {
+        LoginUserCommand command = new LoginUserCommand(EMAIL, password);
+        given(authService.login(command)).willReturn(new AccessToken("test-access-token", EXPIRES_AT));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(EMAIL, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("test-access-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresAt").value(EXPIRES_AT.toString()))
+                .andExpect(jsonPath("$.password").doesNotHaveJsonPath())
+                .andExpect(jsonPath("$.passwordHash").doesNotHaveJsonPath());
+
+        then(authService).should().login(command);
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidLoginCommands")
+    void returnsUnauthorizedForInvalidCredentials(LoginUserCommand command) throws Exception {
+        given(authService.login(command)).willThrow(new InvalidCredentialsException());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(command.email(), command.password())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.timestamp").value(NOW.toString()))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Invalid email or password"))
+                .andExpect(jsonPath("$.path").value("/api/auth/login"))
+                .andExpect(jsonPath("$.fieldErrors").isEmpty())
+                .andExpect(jsonPath("$.accessToken").doesNotHaveJsonPath());
+
+        then(authService).should().login(command);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"oleg", "oleg@gmai", "oleg@@example.com"})
+    void rejectsInvalidEmailForLogin(String email) throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(email, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").value(NOW.toString()))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Request validation failed"))
+                .andExpect(jsonPath("$.path").value("/api/auth/login"))
+                .andExpect(jsonPath("$.fieldErrors.email").value("Email must be valid"));
+
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    void acceptsEmailAtMaximumLengthForLogin() throws Exception {
+        String email = longEmail(57);
+        LoginUserCommand command = new LoginUserCommand(email, PASSWORD);
+        given(authService.login(command)).willReturn(new AccessToken("test-access-token", EXPIRES_AT));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(email, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("test-access-token"));
+
+        then(authService).should().login(command);
+    }
+
+    @Test
+    void rejectsEmailLongerThanMaximumForLogin() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(longEmail(58), PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.email").isString());
+
+        verifyNoInteractions(authService);
+    }
+
+    @ParameterizedTest
+    @MethodSource("oversizedPasswords")
+    void rejectsLoginPasswordsExceedingSeventyTwoUtf8Bytes(String password) throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(EMAIL, password)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.password")
+                        .value("Password must not exceed 72 UTF-8 bytes"));
+
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    void returnsFieldErrorsForMissingLoginFields() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.email").value("Email must not be blank"))
+                .andExpect(jsonPath("$.fieldErrors.password").value("Password must not be blank"));
+
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    void rejectsBlankLoginFields() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content(requestJson(" ", " ")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.email").isString())
+                .andExpect(jsonPath("$.fieldErrors.password").isString());
+
+        verifyNoInteractions(authService);
+    }
+
+    private static Stream<String> validLoginPasswords() {
+        return Stream.of(
+                PASSWORD,
+                " my-long-password-123 ",
+                "a".repeat(72),
+                "я".repeat(36),
+                "😀".repeat(18)
+        );
+    }
+
+    private static Stream<LoginUserCommand> invalidLoginCommands() {
+        return Stream.of(
+                new LoginUserCommand(EMAIL, "wrong-long-password"),
+                new LoginUserCommand(EMAIL, "short"),
+                new LoginUserCommand("missing@example.com", PASSWORD)
+        );
     }
 
     private static Stream<String> validPasswords() {

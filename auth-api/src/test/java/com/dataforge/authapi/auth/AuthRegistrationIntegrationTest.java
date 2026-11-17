@@ -4,6 +4,7 @@ import com.dataforge.authapi.auth.commands.RegisterUserCommand;
 import com.dataforge.authapi.auth.model.User;
 import com.dataforge.authapi.auth.model.UserRole;
 import com.dataforge.authapi.auth.storage.UserStorage;
+import com.dataforge.authapi.config.JwtTestConfiguration;
 import com.dataforge.authapi.config.PostgresTestConfiguration;
 import com.dataforge.authapi.data.entity.UserEntity;
 import com.dataforge.authapi.data.repository.UserRepository;
@@ -38,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.BDDMockito.given;
 
 @SpringBootTest
-@Import(PostgresTestConfiguration.class)
+@Import({PostgresTestConfiguration.class, JwtTestConfiguration.class})
 class AuthRegistrationIntegrationTest {
 
     private static final String EMAIL = "oleg@example.com";

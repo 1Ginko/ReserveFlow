@@ -76,6 +76,16 @@ services:
       AUTH_POSTGRES_USER: ${AUTH_POSTGRES_USER}
       AUTH_POSTGRES_PASSWORD: ${AUTH_POSTGRES_PASSWORD}
 
+      AUTH_JWT_PRIVATE_KEY_LOCATION: file:/run/secrets/jwt/private.pem
+      AUTH_JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/jwt/public.pem
+      AUTH_JWT_ISSUER: ${AUTH_JWT_ISSUER}
+      AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE}
+      AUTH_JWT_ACCESS_TOKEN_TTL: ${AUTH_JWT_ACCESS_TOKEN_TTL}
+
+    volumes:
+      - ./secrets/jwt/private.pem:/run/secrets/jwt/private.pem:ro
+      - ./secrets/jwt/public.pem:/run/secrets/jwt/public.pem:ro
+
     ports:
       - "8081:8081"
 

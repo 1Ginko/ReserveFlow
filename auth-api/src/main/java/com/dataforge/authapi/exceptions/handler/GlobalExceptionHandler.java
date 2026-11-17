@@ -1,6 +1,7 @@
 package com.dataforge.authapi.exceptions.handler;
 
 import com.dataforge.authapi.error.ApiErrorResponse;
+import com.dataforge.authapi.exceptions.InvalidCredentialsException;
 import com.dataforge.authapi.exceptions.UserAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -29,6 +30,26 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         HttpStatus status = HttpStatus.CONFLICT;
+        ApiErrorResponse response = new ApiErrorResponse(
+                clock.instant(),
+                status.value(),
+                status.getReasonPhrase(),
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of()
+        );
+
+        return ResponseEntity
+                .status(status)
+                .body(response);
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
+            InvalidCredentialsException exception,
+            HttpServletRequest request
+    ) {
+        HttpStatus status = HttpStatus.UNAUTHORIZED;
         ApiErrorResponse response = new ApiErrorResponse(
                 clock.instant(),
                 status.value(),
