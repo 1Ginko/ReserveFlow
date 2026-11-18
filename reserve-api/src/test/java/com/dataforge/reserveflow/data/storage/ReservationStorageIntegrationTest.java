@@ -26,6 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -38,12 +39,18 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = "app.reservation-expiration.enabled=false")
 @Import({PostgresTestConfiguration.class, JwtTestConfiguration.class})
 class ReservationStorageIntegrationTest {
+
+    private static final UUID USER_ID = UUID.fromString("4eeaa832-8a05-4c00-b45c-5a1c18746a41");
+    private static final UUID OTHER_USER_ID = UUID.fromString("82fe9011-656b-46ce-83ba-2d211a5b33c2");
+    private static final UUID FIRST_RETRY_ID = UUID.fromString("34f97d89-c675-49ad-9ac3-05e40dc7becc");
+    private static final UUID SECOND_RETRY_ID = UUID.fromString("99da0a0f-422a-4860-99ad-4b4276c97982");
 
     private static final UUID PRODUCT_ID = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
     private static final UUID RESERVATION_ID = UUID.fromString("6cfe755a-a85b-4ba3-80cd-d05451686746");
@@ -102,8 +109,9 @@ class ReservationStorageIntegrationTest {
         assertEquals(firstResult.reservation(), repeatedResult.reservation());
 
         assertEquals(1L, reservationRepository.count());
-        ReservationEntity stored = reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY).orElseThrow();
+        ReservationEntity stored = reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).orElseThrow();
         assertEquals(RESERVATION_ID, stored.getReservationId());
+        assertEquals(USER_ID, stored.getUserId());
 
         ProductInventoryEntity inventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
         assertEquals(10, inventory.getOnHandQuantity());
@@ -122,7 +130,7 @@ class ReservationStorageIntegrationTest {
         );
 
         assertEquals(0L, reservationRepository.count());
-        assertTrue(reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY).isEmpty());
+        assertTrue(reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).isEmpty());
 
         ProductInventoryEntity unchangedInventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
         assertEquals(10, unchangedInventory.getOnHandQuantity());
@@ -135,7 +143,7 @@ class ReservationStorageIntegrationTest {
         assertTrue(retryResult.created());
         assertEquals(retry, retryResult.reservation());
         assertEquals(1L, reservationRepository.count());
-        ReservationEntity stored = reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY).orElseThrow();
+        ReservationEntity stored = reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).orElseThrow();
         assertEquals(SECOND_RESERVATION_ID, stored.getReservationId());
 
         ProductInventoryEntity updatedInventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
@@ -191,7 +199,7 @@ class ReservationStorageIntegrationTest {
                 assertEquals(firstResult.reservation(), secondResult.reservation());
 
                 assertEquals(1L, reservationRepository.count());
-                ReservationEntity stored = reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY).orElseThrow();
+                ReservationEntity stored = reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).orElseThrow();
                 assertEquals(RESERVATION_ID, stored.getReservationId());
 
                 ProductInventoryEntity inventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
@@ -254,9 +262,9 @@ class ReservationStorageIntegrationTest {
                 assertInstanceOf(InventoryConcurrentUpdateException.class, failure.getCause());
 
                 assertEquals(1L, reservationRepository.count());
-                ReservationEntity stored = reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY).orElseThrow();
+                ReservationEntity stored = reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).orElseThrow();
                 assertEquals(RESERVATION_ID, stored.getReservationId());
-                assertTrue(reservationRepository.findByIdempotencyKey(SECOND_IDEMPOTENCY_KEY).isEmpty());
+                assertTrue(reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, SECOND_IDEMPOTENCY_KEY).isEmpty());
 
                 ProductInventoryEntity inventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
                 assertEquals(10, inventory.getOnHandQuantity());
@@ -267,6 +275,74 @@ class ReservationStorageIntegrationTest {
                 allowCommit.complete(null);
             }
         }
+    }
+
+    @Test
+    void sameKeyForDifferentUsersCreatesIndependentReservationsAndReplaysOnlyTheirOwn() {
+        Reservation firstRequest = reservation(RESERVATION_ID, USER_ID, 3, NOW);
+        Reservation secondRequest = reservation(SECOND_RESERVATION_ID, OTHER_USER_ID, 4, NOW);
+
+        ReservationCreationResult firstResult = reservationStorage.create(firstRequest, IDEMPOTENCY_KEY);
+        assertTrue(reservationRepository
+                .findByUserIdAndIdempotencyKey(OTHER_USER_ID, IDEMPOTENCY_KEY).isEmpty());
+        ReservationCreationResult secondResult = reservationStorage.create(secondRequest, IDEMPOTENCY_KEY);
+
+        assertTrue(firstResult.created());
+        assertTrue(secondResult.created());
+        assertEquals(firstRequest, firstResult.reservation());
+        assertEquals(secondRequest, secondResult.reservation());
+        assertEquals(USER_ID, reservationRepository
+                .findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).orElseThrow().getUserId());
+        assertEquals(OTHER_USER_ID, reservationRepository
+                .findByUserIdAndIdempotencyKey(OTHER_USER_ID, IDEMPOTENCY_KEY).orElseThrow().getUserId());
+
+        ReservationCreationResult firstRetry = reservationStorage.create(
+                reservation(FIRST_RETRY_ID, USER_ID, 3, NOW.plusSeconds(60)), IDEMPOTENCY_KEY
+        );
+        ReservationCreationResult secondRetry = reservationStorage.create(
+                reservation(SECOND_RETRY_ID, OTHER_USER_ID, 4, NOW.plusSeconds(60)), IDEMPOTENCY_KEY
+        );
+
+        assertFalse(firstRetry.created());
+        assertFalse(secondRetry.created());
+        assertEquals(firstResult.reservation(), firstRetry.reservation());
+        assertEquals(secondResult.reservation(), secondRetry.reservation());
+        assertEquals(2L, reservationRepository.count());
+
+        ProductInventoryEntity inventory = inventoryRepository.findById(PRODUCT_ID).orElseThrow();
+        assertEquals(10, inventory.getOnHandQuantity());
+        assertEquals(7, inventory.getReservedQuantity());
+        assertEquals(3, inventory.getAvailableQuantity());
+        assertEquals(2L, inventory.getVersion());
+    }
+
+    @Test
+    void legacyReservationWithoutOwnerDoesNotClaimAnotherUsersKey() {
+        jdbcTemplate.update("""
+                INSERT INTO reservations (
+                    reservation_id, product_id, idempotency_key, quantity,
+                    reservation_status, expires_at, version, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 1, 'CANCELLED', ?, 1, ?, ?)
+                """,
+                RESERVATION_ID, PRODUCT_ID, IDEMPOTENCY_KEY,
+                NOW.plusSeconds(900).atOffset(ZoneOffset.UTC),
+                NOW.atOffset(ZoneOffset.UTC), NOW.atOffset(ZoneOffset.UTC)
+        );
+        assertNull(reservationStorage.findById(RESERVATION_ID).orElseThrow().userId());
+        assertTrue(reservationRepository
+                .findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).isEmpty());
+
+        Reservation request = reservation(SECOND_RESERVATION_ID, USER_ID, 3, NOW);
+        ReservationCreationResult result = reservationStorage.create(request, IDEMPOTENCY_KEY);
+
+        assertTrue(result.created());
+        assertEquals(request, result.reservation());
+        assertEquals(2L, reservationRepository.count());
+        assertNull(reservationRepository.findById(RESERVATION_ID).orElseThrow().getUserId());
+        assertEquals(SECOND_RESERVATION_ID, reservationRepository
+                .findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY).orElseThrow().getReservationId());
+        assertEquals(3, inventoryRepository.findById(PRODUCT_ID).orElseThrow().getReservedQuantity());
     }
 
     private boolean isAnotherTransactionBlockedBy(int blockingPid) {
@@ -285,9 +361,14 @@ class ReservationStorageIntegrationTest {
     }
 
     private Reservation reservation(UUID reservationId, int quantity, Instant createdAt) {
+        return reservation(reservationId, USER_ID, quantity, createdAt);
+    }
+
+    private Reservation reservation(UUID reservationId, UUID userId, int quantity, Instant createdAt) {
         return new Reservation(
                 reservationId,
                 PRODUCT_ID,
+                userId,
                 quantity,
                 ReservationStatus.ACTIVE,
                 createdAt.plusSeconds(900),

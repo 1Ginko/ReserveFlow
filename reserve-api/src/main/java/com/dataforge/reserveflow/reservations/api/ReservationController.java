@@ -9,6 +9,8 @@ import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -50,10 +53,13 @@ public class ReservationController {
 
     @PostMapping
     public ResponseEntity<ReservationResponse> create(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestHeader("Idempotency-Key") UUID idempotencyKey,
             @Valid @RequestBody CreateReservationRequest request
     ) {
-        CreateReservationCommand command = ReservationControllerMapper.toCommand(idempotencyKey, request);
+        UUID userId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+
+        CreateReservationCommand command = ReservationControllerMapper.toCommand(userId, idempotencyKey, request);
         ReservationCreationResult result = reservationService.create(command);
         ReservationResponse response = ReservationControllerMapper.toResponse(result.reservation());
 

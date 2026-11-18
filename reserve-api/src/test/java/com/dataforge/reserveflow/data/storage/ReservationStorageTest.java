@@ -36,6 +36,8 @@ import static org.mockito.Mockito.mock;
 @ExtendWith(MockitoExtension.class)
 class ReservationStorageTest {
 
+    private static final UUID USER_ID = UUID.fromString("4eeaa832-8a05-4c00-b45c-5a1c18746a41");
+
     private static final UUID PRODUCT_ID = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
     private static final UUID RESERVATION_ID = UUID.fromString("6cfe755a-a85b-4ba3-80cd-d05451686746");
     private static final UUID EXISTING_ID = UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
@@ -64,6 +66,7 @@ class ReservationStorageTest {
         reservation = new Reservation(
                 RESERVATION_ID,
                 PRODUCT_ID,
+                USER_ID,
                 3,
                 ReservationStatus.ACTIVE,
                 NOW.plusSeconds(900),
@@ -90,6 +93,7 @@ class ReservationStorageTest {
         Reservation expected = new Reservation(
                 RESERVATION_ID,
                 PRODUCT_ID,
+                USER_ID,
                 3,
                 ReservationStatus.ACTIVE,
                 persistedAt.plusSeconds(900),
@@ -101,7 +105,7 @@ class ReservationStorageTest {
 
         InOrder order = inOrder(reservationRepository, inventoryRepository);
         order.verify(reservationRepository).insertIfAbsent(
-                RESERVATION_ID, PRODUCT_ID, IDEMPOTENCY_KEY, 3, NOW.plusSeconds(900), NOW
+                RESERVATION_ID, PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3, NOW.plusSeconds(900), NOW
         );
         order.verify(inventoryRepository).updateReservedQuantity(PRODUCT_ID, 5, 4, NOW);
         order.verify(reservationRepository).findById(RESERVATION_ID);
@@ -117,13 +121,14 @@ class ReservationStorageTest {
         givenInsertResult(0);
         Instant createdAt = NOW.minusSeconds(3600).truncatedTo(ChronoUnit.MICROS);
         ReservationEntity existing = persistedReservation(EXISTING_ID, createdAt);
-        given(reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).willReturn(Optional.of(existing));
+        given(reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY)).willReturn(Optional.of(existing));
 
         ReservationCreationResult result = reservationStorage.create(reservation, IDEMPOTENCY_KEY);
 
         Reservation expected = new Reservation(
                 EXISTING_ID,
                 PRODUCT_ID,
+                USER_ID,
                 3,
                 ReservationStatus.ACTIVE,
                 createdAt.plusSeconds(900),
@@ -133,7 +138,7 @@ class ReservationStorageTest {
         );
         assertEquals(new ReservationCreationResult(expected, false), result);
         verifyInsert();
-        then(reservationRepository).should().findByIdempotencyKey(IDEMPOTENCY_KEY);
+        then(reservationRepository).should().findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY);
         then(reservationRepository).shouldHaveNoMoreInteractions();
         then(productRepository).shouldHaveNoInteractions();
         then(inventoryRepository).shouldHaveNoInteractions();
@@ -142,7 +147,7 @@ class ReservationStorageTest {
     @Test
     void rejectsMissingProductWhenNothingWasInsertedAndKeyIsUnknown() {
         givenInsertResult(0);
-        given(reservationRepository.findByIdempotencyKey(IDEMPOTENCY_KEY)).willReturn(Optional.empty());
+        given(reservationRepository.findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY)).willReturn(Optional.empty());
 
         ProductNotFoundException exception = assertThrows(
                 ProductNotFoundException.class,
@@ -151,7 +156,7 @@ class ReservationStorageTest {
 
         assertEquals("Product not found: " + PRODUCT_ID, exception.getMessage());
         verifyInsert();
-        then(reservationRepository).should().findByIdempotencyKey(IDEMPOTENCY_KEY);
+        then(reservationRepository).should().findByUserIdAndIdempotencyKey(USER_ID, IDEMPOTENCY_KEY);
         then(reservationRepository).shouldHaveNoMoreInteractions();
         then(productRepository).shouldHaveNoInteractions();
         then(inventoryRepository).shouldHaveNoInteractions();
@@ -237,13 +242,13 @@ class ReservationStorageTest {
 
     private void givenInsertResult(int insertedRows) {
         given(reservationRepository.insertIfAbsent(
-                RESERVATION_ID, PRODUCT_ID, IDEMPOTENCY_KEY, 3, NOW.plusSeconds(900), NOW
+                RESERVATION_ID, PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3, NOW.plusSeconds(900), NOW
         )).willReturn(insertedRows);
     }
 
     private void verifyInsert() {
         then(reservationRepository).should().insertIfAbsent(
-                RESERVATION_ID, PRODUCT_ID, IDEMPOTENCY_KEY, 3, NOW.plusSeconds(900), NOW
+                RESERVATION_ID, PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3, NOW.plusSeconds(900), NOW
         );
     }
 
@@ -264,7 +269,7 @@ class ReservationStorageTest {
 
     private ReservationEntity persistedReservation(UUID reservationId, Instant createdAt) {
         return new ReservationEntity(
-                reservationId, PRODUCT_ID, 3, createdAt.plusSeconds(900), createdAt
+                reservationId, PRODUCT_ID, USER_ID, 3, createdAt.plusSeconds(900), createdAt
         );
     }
 }

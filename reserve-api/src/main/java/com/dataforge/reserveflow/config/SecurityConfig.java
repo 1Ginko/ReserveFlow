@@ -29,7 +29,6 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/products",

@@ -23,6 +23,9 @@ public class ReservationEntity {
     @Column(name = PRODUCT_ID, nullable = false, updatable = false)
     private UUID productId;
 
+    @Column(name = USER_ID, updatable = false)
+    private UUID userId;
+
     @Column(name = QUANTITY, nullable = false, updatable = false)
     private int quantity;
 
@@ -52,12 +55,14 @@ public class ReservationEntity {
     public ReservationEntity(
             UUID reservationId,
             UUID productId,
+            UUID userId,
             int quantity,
             Instant expiresAt,
             Instant createdAt
     ) {
         this.reservationId = reservationId;
         this.productId = productId;
+        this.userId = userId;
         this.quantity = quantity;
         this.status = ReservationStatus.ACTIVE;
         this.expiresAt = expiresAt;
@@ -71,6 +76,10 @@ public class ReservationEntity {
 
     public UUID getProductId() {
         return productId;
+    }
+
+    public UUID getUserId() {
+        return userId;
     }
 
     public int getQuantity() {
@@ -104,6 +113,7 @@ public class ReservationEntity {
     static final String RESERVATION_TABLE = "reservations";
     static final String RESERVATION_ID = "reservation_id";
     static final String PRODUCT_ID = "product_id";
+    static final String USER_ID = "user_id";
     static final String QUANTITY = "quantity";
     static final String RESERVATION_STATUS = "reservation_status";
     static final String EXPIRES_AT = "expires_at";

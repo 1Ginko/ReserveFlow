@@ -13,21 +13,27 @@ import com.dataforge.reserveflow.reservations.commands.CreateReservationCommand;
 import com.dataforge.reserveflow.reservations.model.Reservation;
 import com.dataforge.reserveflow.reservations.model.ReservationCreationResult;
 import com.dataforge.reserveflow.reservations.model.ReservationStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
+import static com.dataforge.reserveflow.security.UserRole.USER;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
@@ -41,8 +47,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ReservationController.class)
 @Import(SecurityConfig.class)
-@WithMockUser(roles = "USER")
 class ReservationControllerTest {
+
+    private static final UUID USER_ID = UUID.fromString("4eeaa832-8a05-4c00-b45c-5a1c18746a41");
 
     private static final UUID IDEMPOTENCY_KEY = UUID.fromString("8fa9556c-2c2f-4b34-9af5-f9f020aa9a15");
 
@@ -57,6 +64,19 @@ class ReservationControllerTest {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @BeforeEach
+    void authenticateUser() {
+        Jwt jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject(USER_ID.toString())
+                .claim("role", USER.name())
+                .build();
+        TestSecurityContextHolder.setAuthentication(new JwtAuthenticationToken(
+                jwt,
+                List.of(new SimpleGrantedAuthority("ROLE_" + USER.name()))
+        ));
+    }
 
     @Test
     void findsReservationById() throws Exception {
@@ -73,6 +93,7 @@ class ReservationControllerTest {
         Reservation reservation = new Reservation(
                 reservationId,
                 productId,
+                USER_ID,
                 3,
                 ReservationStatus.CANCELLED,
                 expiresAt,
@@ -139,11 +160,12 @@ class ReservationControllerTest {
         Instant expiresAt = Instant.parse("2026-10-24T08:40:16Z");
 
         CreateReservationCommand command =
-                new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 3);
+                new CreateReservationCommand(productId, USER_ID, IDEMPOTENCY_KEY, 3);
 
         Reservation reservation = new Reservation(
                 reservationId,
                 productId,
+                USER_ID,
                 3,
                 ReservationStatus.ACTIVE,
                 expiresAt,
@@ -178,7 +200,7 @@ class ReservationControllerTest {
     void rejectsReusedKeyWithDifferentParameters() throws Exception {
         UUID productId = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
         Instant now = Instant.parse("2026-11-04T12:00:00Z");
-        CreateReservationCommand command = new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 4);
+        CreateReservationCommand command = new CreateReservationCommand(productId, USER_ID, IDEMPOTENCY_KEY, 4);
 
         given(clock.instant()).willReturn(now);
         given(reservationService.create(command))
@@ -477,7 +499,7 @@ class ReservationControllerTest {
 
         Instant now = Instant.parse("2026-10-24T08:34:00Z");
         CreateReservationCommand command =
-                new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 1);
+                new CreateReservationCommand(productId, USER_ID, IDEMPOTENCY_KEY, 1);
 
         given(clock.instant()).willReturn(now);
         given(reservationService.create(command))
@@ -511,7 +533,7 @@ class ReservationControllerTest {
 
         Instant now = Instant.parse("2026-10-24T08:35:00Z");
         CreateReservationCommand command =
-                new CreateReservationCommand(productId, IDEMPOTENCY_KEY, 100);
+                new CreateReservationCommand(productId, USER_ID, IDEMPOTENCY_KEY, 100);
 
         given(clock.instant()).willReturn(now);
         given(reservationService.create(command))

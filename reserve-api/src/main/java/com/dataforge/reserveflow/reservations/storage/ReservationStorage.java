@@ -21,7 +21,7 @@ public interface ReservationStorage {
 
     Optional<Reservation> findById(UUID reservationId);
 
-    Optional<Reservation> findByIdempotencyKey(UUID idempotencyKey);
+    Optional<Reservation> findByUserIdAndIdempotencyKey(UUID userId, UUID idempotencyKey);
 
     boolean expire(ReservationExpirationCandidate candidate, Instant expiredAt);
 }

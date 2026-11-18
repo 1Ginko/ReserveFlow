@@ -95,13 +95,16 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
 
     @Query(
             value = """
-            SELECT *
-            FROM reservations
-            WHERE idempotency_key = :idempotencyKey
-            """,
+                SELECT *
+                FROM reservations
+                WHERE user_id = :userId AND idempotency_key = :idempotencyKey
+                """,
             nativeQuery = true
     )
-    Optional<ReservationEntity> findByIdempotencyKey(@Param("idempotencyKey") UUID idempotencyKey);
+    Optional<ReservationEntity> findByUserIdAndIdempotencyKey(
+            @Param("userId") UUID userId,
+            @Param("idempotencyKey") UUID idempotencyKey
+    );
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
@@ -109,6 +112,7 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
             INSERT INTO reservations (
                 reservation_id,
                 product_id,
+                user_id,
                 idempotency_key,
                 quantity,
                 reservation_status,
@@ -120,6 +124,7 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
             SELECT
                 :reservationId,
                 p.product_id,
+                :userId,
                 :idempotencyKey,
                 :quantity,
                 'ACTIVE',
@@ -129,13 +134,14 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
                 :createdAt
             FROM products p
             WHERE p.product_id = :productId
-            ON CONFLICT (idempotency_key) DO NOTHING
+            ON CONFLICT (user_id, idempotency_key) DO NOTHING
             """,
             nativeQuery = true
     )
     int insertIfAbsent(
             @Param("reservationId") UUID reservationId,
             @Param("productId") UUID productId,
+            @Param("userId") UUID userId,
             @Param("idempotencyKey") UUID idempotencyKey,
             @Param("quantity") int quantity,
             @Param("expiresAt") Instant expiresAt,

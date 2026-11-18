@@ -51,8 +51,10 @@ public class ReservationStorageImpl implements ReservationStorage {
     }
 
     @Override
-    public Optional<Reservation> findByIdempotencyKey(UUID idempotencyKey) {
-        return reservationRepository.findByIdempotencyKey(idempotencyKey).map(this::toReservation);
+    public Optional<Reservation> findByUserIdAndIdempotencyKey(UUID userId, UUID idempotencyKey) {
+        return reservationRepository
+                .findByUserIdAndIdempotencyKey(userId, idempotencyKey)
+                .map(this::toReservation);
     }
 
     @Override
@@ -182,6 +184,7 @@ public class ReservationStorageImpl implements ReservationStorage {
         int insertedRows = reservationRepository.insertIfAbsent(
                 reservation.reservationId(),
                 reservation.productId(),
+                reservation.userId(),
                 idempotencyKey,
                 reservation.quantity(),
                 reservation.expiresAt(),
@@ -191,7 +194,7 @@ public class ReservationStorageImpl implements ReservationStorage {
         // 2. Return an existing reservation before checking the current product state.
         // If no reservation has this key, the INSERT found no matching product.
         if (insertedRows == 0) {
-            Reservation existing = findByIdempotencyKey(idempotencyKey)
+            Reservation existing = findByUserIdAndIdempotencyKey(reservation.userId(), idempotencyKey)
                     .orElseThrow(() -> new ProductNotFoundException(reservation.productId()));
 
             return new ReservationCreationResult(existing, false);
@@ -249,6 +252,7 @@ public class ReservationStorageImpl implements ReservationStorage {
         return new Reservation(
                 entity.getReservationId(),
                 entity.getProductId(),
+                entity.getUserId(),
                 entity.getQuantity(),
                 entity.getStatus(),
                 entity.getExpiresAt(),

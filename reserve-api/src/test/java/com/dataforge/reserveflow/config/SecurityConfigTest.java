@@ -274,7 +274,7 @@ class SecurityConfigTest {
     @ParameterizedTest
     @EnumSource(UserRole.class)
     void bothRolesCanCreateReservation(UserRole role) throws Exception {
-        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, IDEMPOTENCY_KEY, 3);
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3);
         given(reservationService.create(command))
                 .willReturn(new ReservationCreationResult(reservation(), true));
 
@@ -285,6 +285,53 @@ class SecurityConfigTest {
                         .content(createReservationJson()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reservationId").value(RESERVATION_ID.toString()));
+
+        then(reservationService).should().create(command);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "4eeaa832-8a05-4c00-b45c-5a1c18746a41",
+            "4EEAA832-8A05-4C00-B45C-5A1C18746A41",
+            "82fe9011-656b-46ce-83ba-2d211a5b33c2"
+    })
+    void takesReservationOwnerFromJwtSubject(String subject) throws Exception {
+        UUID userId = UUID.fromString(subject);
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, userId, IDEMPOTENCY_KEY, 3);
+        given(reservationService.create(command))
+                .willReturn(new ReservationCreationResult(reservation(userId), true));
+        String token = sign(jwtTestEncoder, SignatureAlgorithm.RS256,
+                claims(USER.name()).subject(subject).build());
+
+        mockMvc.perform(post("/api/reservations")
+                        .header(AUTHORIZATION, "Bearer " + token)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
+                        .contentType(APPLICATION_JSON)
+                        .content(createReservationJson()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reservationId").value(RESERVATION_ID.toString()));
+
+        then(reservationService).should().create(command);
+    }
+
+    @Test
+    void doesNotTakeReservationOwnerFromRequestBody() throws Exception {
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3);
+        given(reservationService.create(command))
+                .willReturn(new ReservationCreationResult(reservation(), true));
+
+        mockMvc.perform(post("/api/reservations")
+                        .header(AUTHORIZATION, "Bearer " + token(USER))
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY.toString())
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productId": "d479265e-8dec-4cfc-b5e8-ab0141e44b3a",
+                                  "quantity": 3,
+                                  "userId": "82fe9011-656b-46ce-83ba-2d211a5b33c2"
+                                }
+                                """))
+                .andExpect(status().isCreated());
 
         then(reservationService).should().create(command);
     }
@@ -404,7 +451,14 @@ class SecurityConfigTest {
                         .claims(values -> values.remove("iss")).build()),
                 Arguments.of("Wrong audience", claims(USER.name()).audience(List.of("other-service")).build()),
                 Arguments.of("Missing audience", claims(USER.name())
-                        .claims(values -> values.remove("aud")).build())
+                        .claims(values -> values.remove("aud")).build()),
+                Arguments.of("Missing subject", claims(USER.name())
+                        .claims(values -> values.remove("sub")).build()),
+                Arguments.of("Empty subject", claims(USER.name()).subject("").build()),
+                Arguments.of("Blank subject", claims(USER.name()).subject(" ").build()),
+                Arguments.of("Invalid subject", claims(USER.name()).subject("not-a-uuid").build()),
+                Arguments.of("Abbreviated UUID subject", claims(USER.name()).subject("1-1-1-1-1").build()),
+                Arguments.of("Numeric subject", claims(USER.name()).claim("sub", 42).build())
         );
     }
 
@@ -443,8 +497,12 @@ class SecurityConfigTest {
     }
 
     private static Reservation reservation() {
+        return reservation(USER_ID);
+    }
+
+    private static Reservation reservation(UUID userId) {
         return new Reservation(
-                RESERVATION_ID, PRODUCT_ID, 3, ReservationStatus.ACTIVE,
+                RESERVATION_ID, PRODUCT_ID, userId, 3, ReservationStatus.ACTIVE,
                 NOW.plusSeconds(900), 0, NOW, NOW
         );
     }

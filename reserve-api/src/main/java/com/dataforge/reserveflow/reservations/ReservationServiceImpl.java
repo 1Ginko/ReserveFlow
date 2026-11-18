@@ -44,6 +44,7 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     public ReservationCreationResult create(CreateReservationCommand command) {
         Objects.requireNonNull(command.idempotencyKey(), "Idempotency key must be specified");
+        Objects.requireNonNull(command.userId(), "User ID must be specified");
 
         if (command.quantity() <= 0) {
             throw new InvalidReservationQuantityException(command.quantity());
@@ -53,6 +54,7 @@ public class ReservationServiceImpl implements ReservationService {
         Reservation reservation = new Reservation(
                 UUID.randomUUID(),
                 command.productId(),
+                command.userId(),
                 command.quantity(),
                 ReservationStatus.ACTIVE,
                 now.plus(RESERVATION_DURATION),

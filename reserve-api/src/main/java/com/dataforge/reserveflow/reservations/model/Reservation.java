@@ -6,6 +6,7 @@ import java.util.UUID;
 public record Reservation(
         UUID reservationId,
         UUID productId,
+        UUID userId,
 
         int quantity,
         ReservationStatus status,

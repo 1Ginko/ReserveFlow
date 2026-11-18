@@ -36,6 +36,8 @@ import static org.mockito.BDDMockito.then;
 @ExtendWith(MockitoExtension.class)
 class ReservationServiceTest {
 
+    private static final UUID USER_ID = UUID.fromString("4eeaa832-8a05-4c00-b45c-5a1c18746a41");
+
     private static final UUID PRODUCT_ID = UUID.fromString("d479265e-8dec-4cfc-b5e8-ab0141e44b3a");
     private static final UUID RESERVATION_ID = UUID.fromString("b1a64797-831c-42eb-8d6b-16a6050ede49");
     private static final UUID IDEMPOTENCY_KEY = UUID.fromString("8fa9556c-2c2f-4b34-9af5-f9f020aa9a15");
@@ -59,7 +61,7 @@ class ReservationServiceTest {
 
     @Test
     void createsReservationWithKeyAndExpiration() {
-        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, IDEMPOTENCY_KEY, 3);
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3);
         given(reservationStorage.create(any(Reservation.class), eq(IDEMPOTENCY_KEY)))
                 .willAnswer(invocation -> new ReservationCreationResult(invocation.getArgument(0), true));
 
@@ -72,6 +74,7 @@ class ReservationServiceTest {
         assertEquals(new Reservation(
                 candidate.reservationId(),
                 PRODUCT_ID,
+                USER_ID,
                 3,
                 ReservationStatus.ACTIVE,
                 NOW.plusSeconds(900),
@@ -87,7 +90,7 @@ class ReservationServiceTest {
     @ParameterizedTest
     @EnumSource(value = ReservationStatus.class, names = {"ACTIVE", "EXPIRED"})
     void returnsExistingReservationWithoutRenewingIt(ReservationStatus status) {
-        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, IDEMPOTENCY_KEY, 3);
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, 3);
         Reservation existing = existingReservation(status);
         ReservationCreationResult expectedResult = new ReservationCreationResult(existing, false);
 
@@ -107,7 +110,7 @@ class ReservationServiceTest {
             "fcc1186a-bae6-460a-adfd-a16b843ae3ec, 3"
     })
     void rejectsKeyUsedForDifferentParameters(UUID productId, int quantity) {
-        CreateReservationCommand command = new CreateReservationCommand(productId, IDEMPOTENCY_KEY, quantity);
+        CreateReservationCommand command = new CreateReservationCommand(productId, USER_ID, IDEMPOTENCY_KEY, quantity);
         Reservation existing = existingReservation(ReservationStatus.ACTIVE);
 
         given(reservationStorage.create(any(Reservation.class), eq(IDEMPOTENCY_KEY)))
@@ -129,7 +132,7 @@ class ReservationServiceTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
     void rejectsNonPositiveQuantityBeforeStorage(int quantity) {
-        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, IDEMPOTENCY_KEY, quantity);
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, USER_ID, IDEMPOTENCY_KEY, quantity);
 
         InvalidReservationQuantityException exception = assertThrows(
                 InvalidReservationQuantityException.class,
@@ -142,7 +145,7 @@ class ReservationServiceTest {
 
     @Test
     void rejectsMissingKeyBeforeStorage() {
-        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, null, 3);
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, USER_ID, null, 3);
 
         NullPointerException exception = assertThrows(
                 NullPointerException.class,
@@ -150,6 +153,19 @@ class ReservationServiceTest {
         );
 
         assertEquals("Idempotency key must be specified", exception.getMessage());
+        then(reservationStorage).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void rejectsMissingOwnerBeforeStorage() {
+        CreateReservationCommand command = new CreateReservationCommand(PRODUCT_ID, null, IDEMPOTENCY_KEY, 3);
+
+        NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> reservationService.create(command)
+        );
+
+        assertEquals("User ID must be specified", exception.getMessage());
         then(reservationStorage).shouldHaveNoInteractions();
     }
 
@@ -161,6 +177,7 @@ class ReservationServiceTest {
         return new Reservation(
                 RESERVATION_ID,
                 PRODUCT_ID,
+                USER_ID,
                 3,
                 status,
                 expiresAt,

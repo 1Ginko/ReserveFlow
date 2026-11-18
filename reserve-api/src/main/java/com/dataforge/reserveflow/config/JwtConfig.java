@@ -8,6 +8,8 @@ import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtAudienceValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
@@ -17,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
+import java.util.UUID;
 
 @Configuration
 public class JwtConfig {
@@ -42,10 +45,22 @@ public class JwtConfig {
             decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                     timestampValidator,
                     new JwtIssuerValidator(issuer),
-                    new JwtAudienceValidator(audience)
+                    new JwtAudienceValidator(audience),
+                    new JwtClaimValidator<>(JwtClaimNames.SUB, JwtConfig::isValidUserId)
             ));
 
             return decoder;
+        }
+    }
+
+    private static boolean isValidUserId(String subject) {
+        if (subject == null) return false;
+
+        try {
+            UUID userId = UUID.fromString(subject);
+            return userId.toString().equalsIgnoreCase(subject);
+        } catch (IllegalArgumentException exception) {
+            return false;
         }
     }
 }

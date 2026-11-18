@@ -12,11 +12,13 @@ public final class ReservationControllerMapper {
     private ReservationControllerMapper() {}
 
     public static CreateReservationCommand toCommand(
+            UUID userId,
             UUID idempotencyKey,
             CreateReservationRequest request
     ) {
         return new CreateReservationCommand(
                 request.productId(),
+                userId,
                 idempotencyKey,
                 request.quantity()
         );
